@@ -1,0 +1,67 @@
+:root {
+  --bg: #f6f7f9; --card: #fff; --fg: #16181d; --muted: #6b7280;
+  --line: rgba(0,0,0,.12); --accent: #5b54d6; --danger: #c0392b;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #131519; --card: #1b1d22; --fg: #e8e9ec; --muted: #9aa0ab;
+    --line: rgba(255,255,255,.12); --accent: #8b84ff; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 32px 20px 64px; background: var(--bg); color: var(--fg);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+header, main, footer { max-width: 760px; margin: 0 auto; }
+h1 { font-size: 22px; margin: 0 0 6px; }
+h2 { font-size: 14px; margin: 0 0 12px; letter-spacing: .01em; }
+.lede { color: var(--muted); margin: 0 0 24px; max-width: 62ch; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 18px; margin-bottom: 16px; }
+.grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+@media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+.field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+input[type=text], input[type=password], input[type=email], input[type=date], select, textarea {
+  width: 100%; padding: 8px 10px; font: inherit; color: inherit; background: transparent;
+  border: 1px solid var(--line); border-radius: 8px; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+textarea { min-height: 90px; resize: vertical; }
+.full { grid-column: 1 / -1; }
+.row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.row > label { font-size: 12px; color: var(--muted); min-width: 120px; }
+.row > input[type=text], .row > input[type=password], .row > select { flex: 1; min-width: 200px; }
+button { padding: 8px 14px; font: inherit; font-weight: 500; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff; }
+button.ghost { background: transparent; color: inherit; border-color: var(--line); }
+button.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+button:hover { filter: brightness(1.08); }
+.hint { color: var(--muted); font-size: 12px; margin: 6px 0 14px; }
+.hint.err { color: var(--danger); }
+.hint.ok { color: #1b8a5f; }
+.check { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.check input { width: 16px; height: 16px; accent-color: var(--accent); }
+.badge { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 999px;
+  background: rgba(220,150,40,.18); color: #a8700f; margin-left: 8px; }
+.customRow { display: flex; gap: 8px; margin-bottom: 8px; }
+.customRow input { flex: 1; }
+footer { margin-top: 18px; color: var(--muted); font-size: 12px; text-align: right; }
+code { font-size: 12px; background: rgba(128,128,128,.14); padding: 1px 4px; border-radius: 4px; }
+
+.roleBox { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+.roleBox .row:last-of-type { margin-bottom: 0; }
+.roleBox .check { margin: 0 18px 0 0; }
+.grow { flex: 1; min-width: 0; }
+.customRow { align-items: flex-start; }
+.customRow .hint { margin: 2px 0 0; }
+details { margin-top: 10px; }
+summary { cursor: pointer; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+summary:hover { color: var(--fg); }
+
+.cardsum { list-style: none; cursor: pointer; font-size: 14px; font-weight: 500;
+  display: flex; align-items: center; justify-content: space-between; margin: 0; color: var(--fg); }
+.cardsum::-webkit-details-marker { display: none; }
+.cardsum::after { content: '⌄'; color: var(--muted); font-size: 16px; line-height: 1; }
+details[open] .cardsum::after { content: '⌃'; }
+details[open] .cardsum { margin-bottom: 12px; }
+.badge.opt { background: rgba(128,128,128,.2); color: var(--muted); }
+.need { font-size: 10px; color: var(--muted); border: 1px solid var(--line);
+  padding: 1px 5px; border-radius: 999px; margin-left: 6px; }
+.need.on { color: #1b8a5f; border-color: rgba(34,160,110,.5); }
+a { color: var(--accent); }

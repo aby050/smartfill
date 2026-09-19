@@ -1,0 +1,37 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Passenger row test</title>
+<style>body{font:14px/1.5 system-ui;max-width:760px;margin:36px auto;padding:0 16px}
+.pax{border:1px solid #ccc;border-radius:8px;padding:12px;margin-bottom:12px}
+.g{display:grid;grid-template-columns:2fr 1fr 1fr 1.4fr 1.2fr;gap:8px}
+label{display:block;font-size:11px;color:#666;margin-bottom:2px}
+input,select{width:100%;padding:6px;border:1px solid #ccc;border-radius:5px;font:inherit}
+button{padding:8px 14px;border-radius:6px;border:1px solid #888;background:#f4f4f4;font:inherit;cursor:pointer}
+h1{font-size:18px}</style></head><body>
+<h1>Booking — passenger details</h1>
+<p>Mimics the repeated-row pattern: camelCase attribute names, a berth dropdown, a food dropdown, and an add button that appends rows asynchronously.</p>
+<div id="rows"></div>
+<button id="add">+ Add Passenger</button>
+
+<script>
+let n = 0;
+function addRow() {
+  n++;
+  const d = document.createElement('div');
+  d.className = 'pax';
+  d.innerHTML = `
+    <div class="g">
+      <div><label>Passenger Name</label><input name="passengerName${n}" maxlength="16"></div>
+      <div><label>Age (Yrs)</label><input name="passengerAge${n}"></div>
+      <div><label>Gender</label><select name="passengerGender${n}">
+        <option value="">Select</option><option>Male</option><option>Female</option><option>Transgender</option></select></div>
+      <div><label>Berth Preference</label><select name="passengerBerthChoice${n}">
+        <option value="">No Preference</option><option>Lower</option><option>Middle</option>
+        <option>Upper</option><option>Side Lower</option><option>Side Upper</option></select></div>
+      <div><label>Food Choice</label><select name="passengerFoodChoice${n}">
+        <option value="">No Food</option><option>Veg</option><option>Non Veg</option></select></div>
+    </div>`;
+  document.getElementById('rows').append(d);
+}
+addRow();
+// Deliberately async, like a framework re-render.
+document.getElementById('add').onclick = () => setTimeout(addRow, 180);
+</script></body></html>

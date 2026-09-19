@@ -1,0 +1,51 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Smartfill test form</title>
+<style>body{font:14px/1.5 system-ui;max-width:640px;margin:40px auto;padding:0 16px}
+fieldset{border:1px solid #ccc;border-radius:8px;margin-bottom:18px;padding:14px}
+legend{font-weight:600;padding:0 6px}label{display:block;margin:10px 0 3px;font-size:12px;color:#555}
+input,select,textarea{width:100%;padding:7px;border:1px solid #ccc;border-radius:6px;font:inherit}
+textarea{min-height:80px}</style></head><body>
+<h1>Senior Engineer — application</h1>
+<p>A deliberately awkward form: unlabelled ids, a country dropdown, an Indian-format date, a radio group and an open question.</p>
+<form>
+<fieldset><legend>About you</legend>
+  <label for="a1">First Name</label><input id="a1" name="fname">
+  <label for="a2">Surname</label><input id="a2" name="sn">
+  <label for="a3">Email Address</label><input id="a3" type="email" name="emailAddr">
+  <label for="a4">Mobile Number</label><input id="a4" type="tel" name="mob" maxlength="10">
+  <label for="a5">Date of Birth (DD/MM/YYYY)</label><input id="a5" name="dtob" placeholder="DD/MM/YYYY">
+</fieldset>
+<fieldset><legend>Address</legend>
+  <label for="b1">Street Address</label><input id="b1" name="addr_1">
+  <label for="b2">Apartment / Landmark</label><input id="b2" name="addr_2">
+  <label for="b3">City</label><input id="b3" name="cty">
+  <label for="b4">PIN Code</label><input id="b4" name="pncd">
+  <label for="b5">Country</label>
+  <select id="b5" name="ctry"><option value="">Select…</option><option value="IN">India</option>
+  <option value="US">United States</option><option value="GB">United Kingdom</option></select>
+</fieldset>
+<fieldset><legend>Professional</legend>
+  <label for="c1">Current Designation</label><input id="c1" name="dsg">
+  <label for="c2">Current Employer</label><input id="c2" name="emplr">
+  <label for="c3">Total Years of Experience</label><input id="c3" type="number" name="texp">
+  <label for="c4">Expected CTC (annual)</label><input id="c4" name="ectc">
+  <label for="c5">Notice Period</label><input id="c5" name="np">
+  <label for="c6">Highest Qualification</label>
+  <select id="c6" name="q"><option value="">Select…</option><option>Diploma</option>
+  <option>B.Tech</option><option>M.Tech</option><option>MBA</option></select>
+</fieldset>
+<fieldset><legend>Willing to relocate?</legend>
+  <label><input type="radio" name="reloc" value="y"> Yes</label>
+  <label><input type="radio" name="reloc" value="n"> No</label>
+</fieldset>
+<fieldset><legend>Documents</legend>
+  <label for="e1">Upload your resume / CV (PDF or DOCX)</label>
+  <input id="e1" type="file" name="resume" accept=".pdf,.doc,.docx">
+  <label for="e2">Cover letter (optional)</label>
+  <input id="e2" type="file" name="coverdoc" accept=".pdf,.docx">
+</fieldset>
+<fieldset><legend>Anything else</legend>
+  <label for="d1">Why do you want this role? (max 600 characters)</label>
+  <textarea id="d1" name="why" maxlength="600"></textarea>
+  <label for="d2">How did you hear about us?</label><input id="d2" name="src">
+</fieldset>
+</form></body></html>

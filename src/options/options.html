@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smartfill — your profile</title>
+<link rel="stylesheet" href="options.css">
+</head>
+<body>
+<header>
+  <h1>Smartfill</h1>
+  <p class="lede">Everything here stays in this browser profile. Smartfill fills forms on its own, with no account and no key. Adding your own Claude key is optional and unlocks the harder fields — and even then, identity-document numbers are never sent.</p>
+</header>
+
+<main>
+  <section class="card">
+    <details id="aiCard">
+      <summary class="cardsum"><span>Advanced — use your own Claude key <span class="badge opt">optional</span></span></summary>
+
+      <p class="hint">Smartfill works without this. Names, contact details, address, dates, salary, education, links, resume attachment, passenger rows and your saved answers are all matched by built-in rules — free, instant, offline.</p>
+
+      <p class="hint">A key adds the judgement calls: fields worded oddly enough that no rule catches them, written answers to open questions like "why do you want this role", picking which role profile a job page matches, and the job fit score that reads your resume.</p>
+
+      <p class="hint">It is <strong>your</strong> key, billed to you, used straight from your browser — there is no server in between and nobody else can see it. Roughly a fraction of a cent per form.
+      <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get a key at console.anthropic.com</a> — sign in, <em>API keys</em>, <em>Create key</em>, then add credits under <em>Plans &amp; Billing</em>.</p>
+
+      <div class="row">
+        <input type="password" id="apiKey" placeholder="sk-ant-… (leave empty to stay rules-only)" autocomplete="off" spellcheck="false">
+        <button id="toggleKey" class="ghost" type="button">Show</button>
+        <button id="testKey" type="button">Test</button>
+      </div>
+      <p class="hint" id="keyStatus">Stored with <code>chrome.storage.local</code> on this machine only. It is deliberately left out of account sync and out of backup exports, so you paste it again on a new machine.</p>
+
+      <div class="row">
+        <label for="model">Model</label>
+        <select id="model">
+          <option value="claude-opus-5">Claude Opus 5 — best judgement on odd forms</option>
+          <option value="claude-sonnet-5">Claude Sonnet 5 — cheaper, fast</option>
+          <option value="claude-haiku-4-5">Claude Haiku 4.5 — cheapest</option>
+        </select>
+      </div>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>Behaviour</h2>
+    <label class="check"><input type="checkbox" id="useAI"> Ask Claude about fields the rules can't match <span class="need">needs a key</span></label>
+    <label class="check"><input type="checkbox" id="aiForFreeText"> Let Claude compose answers to open questions (cover letters, "why this role") <span class="need">needs a key</span></label>
+    <label class="check"><input type="checkbox" id="showLauncher"> Show a floating <em>Fill this form</em> button when a page has a form</label>
+    <label class="check"><input type="checkbox" id="autofillOnLoad"> Fill automatically when a page with a form loads</label>
+    <label class="check"><input type="checkbox" id="confirmSensitive"> Never auto-fill identity documents — flag them for me instead</label>
+    <label class="check"><input type="checkbox" id="attachResume"> Attach my resume to upload fields automatically</label>
+    <label class="check"><input type="checkbox" id="aiPickRole"> Let Claude pick the role profile when keywords don't match <span class="need">needs a key</span></label>
+    <div class="row">
+      <label for="launcherOffHosts">No floating button on</label>
+      <input type="text" id="launcherOffHosts" placeholder="dismissing the button on a site adds it here">
+    </div>
+    <div class="row">
+      <label for="blockedHosts">Never run on these sites</label>
+      <input type="text" id="blockedHosts" placeholder="bank.com, gov.in — comma separated">
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Resumes</h2>
+    <p class="hint">Upload each version you send out. Files stay in this browser (IndexedDB) and are attached straight into the page's upload control — nothing is uploaded to us or to Claude.</p>
+    <div class="row">
+      <button id="addResume" class="ghost" type="button">+ Add resume</button>
+      <input type="file" id="resumeFile" accept=".pdf,.doc,.docx,.rtf,.txt" multiple hidden>
+    </div>
+    <div id="resumeList"></div>
+  </section>
+
+  <section class="card">
+    <h2>Role profiles</h2>
+    <p class="hint">A role picks its own resume and can override the handful of fields that differ between, say, Product Manager and Project Manager. Smartfill reads the job page and picks the matching role by keyword; if nothing matches it asks Claude, then falls back to your default.</p>
+    <div id="roleList"></div>
+    <button id="addRole" class="ghost" type="button">+ Add role</button>
+  </section>
+
+  <div id="sections"></div>
+
+  <section class="card">
+    <h2>Passengers</h2>
+    <p class="hint">For forms that repeat a block per person — rail and flight booking, group applications. Row 1 gets the first passenger here, row 2 the second, and the extension clicks the form's own "add passenger" button when it needs another row. Order matters.</p>
+    <div id="paxList"></div>
+    <button id="addPax" class="ghost" type="button">+ Add passenger</button>
+  </section>
+
+  <section class="card">
+    <h2>Standing answers</h2>
+    <p class="hint">Questions no profile field covers — consents, declarations, eligibility. You answer each once here and the extension replays your answer whenever it sees that wording. <strong>A consent or declaration is only ever filled from this list.</strong> Claude is never asked to decide one, and anything left blank stays blank on the page for you to answer by hand.</p>
+    <div id="answerList"></div>
+    <div class="row">
+      <button id="addAnswer" class="ghost" type="button">+ Add question</button>
+      <button id="seedAnswers" class="ghost" type="button">Add the usual application questions</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Custom fields</h2>
+    <p class="hint">Anything the standard fields don't cover. The label is matched against the form's own wording, so write it the way a form would.</p>
+    <div id="customList"></div>
+    <button id="addCustom" class="ghost" type="button">+ Add field</button>
+  </section>
+
+  <section class="card">
+    <h2>Sync across machines</h2>
+    <label class="check"><input type="checkbox" id="syncEnabled"> Keep my profile in my Google account</label>
+    <p class="hint" id="syncState">Checking…</p>
+    <div class="row">
+      <button id="syncNow" class="ghost" type="button">Push from this machine</button>
+      <button id="syncPull" class="ghost" type="button">Pull from my account</button>
+    </div>
+    <p class="hint">This rides Chrome's own account sync — whatever Google account is signed into this Chrome. Install the extension on another machine signed into the same account and your profile, roles and settings are already there; no first form needed. Two things stay behind: <strong>resume files</strong> (megabytes, and the account allowance is 100 KB — move those with the export below) and your <strong>API key</strong> (synced values are readable by Google unless you've set a Chrome sync passphrase, so a long-lived key does not belong there).</p>
+  </section>
+
+  <section class="card">
+    <h2>Backup</h2>
+    <div class="row">
+      <button id="export" class="ghost" type="button">Export everything (JSON)</button>
+      <button id="import" class="ghost" type="button">Import backup</button>
+      <input type="file" id="importFile" accept="application/json" hidden>
+      <button id="wipe" class="danger" type="button">Erase everything</button>
+    </div>
+    <p class="hint">The export carries your profile, roles, settings <em>and</em> your resume files, so a fresh install on another machine restores completely — nothing has to be re-learned from a form. It is plain text and includes any ID numbers you saved, so treat the file the way you'd treat a scan of your passport. The API key is deliberately left out; paste it again on the new machine.</p>
+  </section>
+</main>
+
+<footer>
+  <span id="saveState">Saved automatically</span>
+</footer>
+
+<script src="../common/schema.js"></script>
+<script src="../common/store.js"></script>
+<script src="../common/sync.js"></script>
+<script src="options.js"></script>
+</body>
+</html>

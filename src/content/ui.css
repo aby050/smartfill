@@ -1,0 +1,5 @@
+/* Applied to page elements, so everything is namespaced and !important. */
+.sf-hl-filled { outline: 2px solid rgba(34,160,110,.9) !important; outline-offset: 1px !important; transition: outline-color .3s ease !important; }
+.sf-hl-ai     { outline: 2px solid rgba(120,110,230,.95) !important; outline-offset: 1px !important; }
+.sf-hl-review { outline: 2px dashed rgba(220,150,40,.95) !important; outline-offset: 1px !important; }
+.sf-hl-focus  { box-shadow: 0 0 0 4px rgba(120,110,230,.25) !important; }
