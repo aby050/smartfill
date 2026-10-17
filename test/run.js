@@ -199,5 +199,19 @@ const ADD_RE = /^(\+\s*)?add\s*(one\s*)?(more\s*)?(another\s*)?(passenger|travel
 t('add-passenger button matches', ADD_RE.test('+ Add Passenger/ Add Infant With Berth'), true);
 t('infant button ignored', ADD_RE.test('+ Add Infant Without Berth'), false);
 
+
+/* ---- fit verdict + application buttons ---- */
+group('fit verdict / buttons');
+t('score 85 -> apply', S.verdictFor(85, {}), 'apply');
+t('score 60 -> maybe', S.verdictFor(60, {}), 'maybe');
+t('score 30 -> skip', S.verdictFor(30, {}), 'skip');
+t('custom thresholds', S.verdictFor(60, { applyMin: 60, skipBelow: 40 }), 'apply');
+t('Submit application', S.buttonRole('Submit Application'), 'submit');
+t('Apply now', S.buttonRole(' Apply  now '), 'submit');
+t('Save and continue', S.buttonRole('Save and Continue'), 'next');
+t('Next', S.buttonRole('Next'), 'next');
+t('Cancel is not a step', S.buttonRole('Cancel'), null);
+t('long marketing text', S.buttonRole('Apply now and get a free resume review today'), null);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

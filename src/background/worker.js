@@ -382,7 +382,7 @@ async function runOnActiveTab(opts) {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id, allFrames: true },
       files: ['src/common/schema.js', 'src/content/fields.js', 'src/content/files.js',
-        'src/content/rules.js', 'src/content/filler.js', 'src/content/ui.js', 'src/content/main.js']
+        'src/content/rules.js', 'src/content/filler.js', 'src/content/rows.js', 'src/content/ui.js', 'src/content/main.js']
     });
     await chrome.scripting.insertCSS({ target: { tabId: tab.id, allFrames: true }, files: ['src/content/ui.css'] });
     await chrome.tabs.sendMessage(tab.id, { type: 'SF_RUN', opts });

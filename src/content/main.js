@@ -7,7 +7,7 @@
   const RULES = globalThis.SF_RULES;
   const { fill } = globalThis.SF_FILLER;
   const UI = globalThis.SF_UI;
-  const { SENSITIVE_KEYS, resolve, applyRole, matchRole, matchAnswer, DEFAULT_SETTINGS } = globalThis.SF_SCHEMA;
+  const { SENSITIVE_KEYS, resolve, applyRole, matchRole, matchAnswer, DEFAULT_SETTINGS, verdictFor, buttonRole } = globalThis.SF_SCHEMA;
 
   let undoStack = [];
   let running = false;
@@ -78,13 +78,13 @@
   }
 
   async function run(opts = {}) {
-    if (running) return;
+    if (running) return null;
     running = true;
     try {
       const { raw, settings, roles, answers, passengers } = await load();
       if ((settings.blockedHosts || []).some(h => h && location.hostname.includes(h))) {
         UI.status('Smartfill is disabled on this site.', false);
-        return;
+        return null;
       }
 
       const signal = pageSignal();
@@ -98,7 +98,7 @@
 
       if (!hasAnyValue(profile)) {
         UI.status('Your profile is empty. Open the extension options and add your details first.', false);
-        return;
+        return null;
       }
 
       UI.status('Reading the form…', true);
@@ -219,7 +219,7 @@
 
       if (!results.length) {
         UI.status(fields.length ? 'Every field is already filled. Run again with overwrite to replace them.' : 'No fillable fields found here.', false);
-        return;
+        return { blockers: [], filled: 0 };
       }
 
       const jd = jobText();
@@ -261,8 +261,16 @@
       });
 
       if (aiError) console.warn('[Smartfill]', aiError);
+
+      // What still needs a human: consents, flagged IDs, failed writes, required
+      // fields still empty, and a required resume that could not be attached.
+      const blockers = results.filter(r => !r.ok && (r.needsReview || r.via === 'consent' ||
+        (r.isFile && /no resume|could not|failed/i.test(r.reason || '')))).map(r => (r.field && r.field.label) || r.key || 'field');
+      for (const f of collect()) if (f.attrs && f.attrs.required && !f.hasValue && !f.isConsent) blockers.push(f.label || 'required field');
+      return { blockers, filled: results.filter(r => r.ok).length };
     } catch (e) {
       UI.status('Smartfill error: ' + (e && e.message || e), false);
+      return null;
     } finally {
       running = false;
     }
@@ -318,6 +326,113 @@
       UI.mark({ el: t.el }, 'rule', r.ok);
     }
     return { rows: out, resumeUsed: { id: resp.id, filename: resp.filename } };
+  }
+
+  /* ---- automatic fit score + auto-apply ----
+     On a job page the score is fetched on its own (cached 7 days per URL+resume)
+     and shown as an Apply / Maybe / Skip badge. Auto-apply is opt-in and only runs
+     when the score clears autoApplyMin; it stops the moment anything needs a human
+     (a consent, a flagged ID, a required field it could not fill). */
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let scoredUrl = null;
+  let autoActive = false;
+
+  async function scoreThisPage(force) {
+    const { raw, settings, roles } = await load();
+    const signal = pageSignal();
+    const picked = await chooseRole(roles, settings, signal, { allowAI: false });
+    const profile = applyRole(resolve(raw), picked.role);
+    const resumeId = (picked.role && picked.role.resumeId) || settings.defaultResumeId || null;
+    const fit = await chrome.runtime.sendMessage({
+      type: 'SF_SCORE_FIT',
+      payload: {
+        url: location.href, jobTitle: document.title, jobText: jobText(), force: !!force,
+        role: picked.role ? picked.role.name : null, resumeId,
+        profileBits: {
+          currentTitle: profile.currentTitle, yearsExperience: profile.yearsExperience,
+          summary: profile.summary, skills: profile.skills, highestDegree: profile.highestDegree,
+          fieldOfStudy: profile.fieldOfStudy, currentCompany: profile.currentCompany, linkedin: profile.linkedin
+        }
+      }
+    });
+    return { fit, settings };
+  }
+
+  function visibleButtons() {
+    const out = [];
+    for (const el of document.querySelectorAll('button, input[type=submit], input[type=button], a[role=button], [role=button]')) {
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      const role = buttonRole(el.innerText || el.value || el.getAttribute('aria-label'));
+      if (role) out.push({ el, role });
+    }
+    return out;
+  }
+
+  async function logApplication(fit) {
+    const { applications = [] } = await chrome.storage.local.get('applications');
+    applications.push({ url: location.href.split(/[?#]/)[0], host: location.hostname, title: document.title,
+      score: fit.score, at: Date.now(), mode: 'auto' });
+    await chrome.storage.local.set({ applications: applications.slice(-500) });
+  }
+
+  async function autoFlow(fit, st) {
+    if (autoActive || !st.autoApply || !(fit.score >= st.autoApplyMin)) return;
+    autoActive = true;
+    try {
+      const cap = st.autoApplyMaxSteps || 8;
+      const key = 'sf_auto_steps';
+      let steps = Number(sessionStorage.getItem(key) || 0);
+      while (steps < cap) {
+        if (!collect().length && !FILES.collectFileInputs().length) return;
+        const out = await run({ auto: true });
+        if (!out) return;
+        if (out.blockers.length) {
+          sessionStorage.removeItem(key);
+          UI.status(`Auto-apply paused — ${out.blockers.length} thing${out.blockers.length > 1 ? 's' : ''} need you: ${out.blockers.slice(0, 3).join(', ')}`, false);
+          return;
+        }
+        const btns = visibleButtons();
+        const pick = btns.find(b => b.role === 'submit') || btns.find(b => b.role === 'next');
+        if (!pick) { sessionStorage.removeItem(key); return; }
+        steps++;
+        sessionStorage.setItem(key, String(steps));
+        if (pick.role === 'submit') {
+          await logApplication(fit);
+          sessionStorage.removeItem(key);
+          pick.el.click();
+          UI.toast('Smartfill submitted this application (score ' + fit.score + ')');
+          return;
+        }
+        pick.el.click();
+        await sleep(1800);
+      }
+      UI.status('Auto-apply stopped after ' + cap + ' steps — finish this one yourself.', false);
+    } finally {
+      autoActive = false;
+    }
+  }
+
+  async function considerScore() {
+    if (scoredUrl === location.href) return;
+    const { settings } = await load();
+    if (!settings.useAI || !settings.autoScore) return;
+    if ((settings.blockedHosts || []).some(h => h && location.hostname.includes(h))) return;
+    if (!looksLikeJob(jobText())) return;
+    const { apiKey } = await chrome.storage.local.get('apiKey');
+    if (!apiKey) return;
+    scoredUrl = location.href;
+    const { fit, settings: st } = await scoreThisPage(false);
+    if (!fit || !fit.ok) { scoredUrl = null; return; }
+    const verdict = verdictFor(fit.score, st);
+    UI.showScore({
+      score: fit.score, verdict,
+      text: { apply: 'Apply', maybe: 'Maybe', skip: 'Skip' }[verdict] + ' — ' + (fit.verdict || '').slice(0, 60),
+      onClick: () => run()
+    });
+    if (verdict !== 'skip') autoFlow(fit, st).catch(() => {});
   }
 
   async function preview() {
@@ -394,6 +509,7 @@
   let lastCount = -1;
 
   async function considerLauncher() {
+    if (window.top === window && scoredUrl !== location.href) considerScore().catch(() => {});
     if (dismissedHere || running) return;
     const { settings } = await chrome.storage.local.get('settings');
     const st = { ...DEFAULT_SETTINGS, ...(settings || {}) };
@@ -456,6 +572,7 @@
     });
 
     scheduleLauncher(700);
+    setTimeout(() => considerScore().catch(() => {}), 1200);
     // Single-page apps (and booking sites in particular) render the real form
     // well after load, so keep watching — debounced, and only when inputs change.
     const mo = new MutationObserver(muts => {

@@ -129,8 +129,35 @@
     showLauncher: true,
     launcherOffHosts: [],
     aiPickRole: true,
-    blockedHosts: []
+    blockedHosts: [],
+    autoScore: true,        // score every job page against the resume as it loads
+    applyMin: 70,           // score at or above -> "Apply"
+    skipBelow: 50,          // score below -> "Skip"; in between -> "Maybe"
+    autoApply: false,       // opt-in: fill, advance and submit with no clicks
+    autoApplyMin: 80,       // never auto-submit below this score
+    autoApplyMaxSteps: 8
   };
+
+  /** Apply / Maybe / Skip for a 0-100 fit score. */
+  function verdictFor(score, st) {
+    const s = { applyMin: 70, skipBelow: 50, ...(st || {}) };
+    const n = Number(score);
+    if (!isFinite(n)) return 'maybe';
+    if (n >= s.applyMin) return 'apply';
+    if (n < s.skipBelow) return 'skip';
+    return 'maybe';
+  }
+
+  const SUBMIT_RE = /^(submit( my)?( application)?|apply( now)?|send( my)?( application)?|finish|complete application)$/i;
+  const NEXT_RE = /^(next|continue|save (and|&) continue|next step|proceed|review)$/i;
+  /** What a button does in an application flow: 'submit', 'next' or null. */
+  function buttonRole(text) {
+    const t = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!t || t.length > 30) return null;
+    if (SUBMIT_RE.test(t)) return 'submit';
+    if (NEXT_RE.test(t)) return 'next';
+    return null;
+  }
 
   /* ---- passengers ----
      Multi-row forms (rail/air booking, group applications) repeat the same block
@@ -253,6 +280,6 @@
   globalThis.SF_SCHEMA = {
     SECTIONS, ALL_FIELDS, SENSITIVE_KEYS, resolve, DEFAULT_SETTINGS,
     ROLE_OVERRIDE_KEYS, matchRole, applyRole, matchAnswer, COMMON_ANSWERS,
-    PASSENGER_FIELDS, passengerKeyFor
+    PASSENGER_FIELDS, passengerKeyFor, verdictFor, buttonRole
   };
 })();

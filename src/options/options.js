@@ -396,10 +396,15 @@ function buildRoles() {
 }
 
 function bindSettings() {
-  for (const id of ['useAI', 'aiForFreeText', 'autofillOnLoad', 'confirmSensitive', 'attachResume', 'aiPickRole', 'showLauncher']) {
+  for (const id of ['useAI', 'aiForFreeText', 'autofillOnLoad', 'confirmSensitive', 'attachResume', 'aiPickRole', 'showLauncher', 'autoScore', 'autoApply']) {
     const n = $(id);
     n.checked = !!settings[id];
     n.onchange = () => { settings[id] = n.checked; queueSave(); };
+  }
+  for (const id of ['applyMin', 'skipBelow', 'autoApplyMin']) {
+    const n = $(id);
+    n.value = settings[id] != null ? settings[id] : DEFAULT_SETTINGS[id];
+    n.onchange = () => { settings[id] = Math.max(0, Math.min(100, Number(n.value) || 0)); queueSave(); };
   }
   $('model').value = settings.model || DEFAULT_SETTINGS.model;
   $('model').onchange = () => { settings.model = $('model').value; queueSave(); };

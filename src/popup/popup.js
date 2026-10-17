@@ -24,7 +24,7 @@ async function ask(type, opts, tries = 2) {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id, allFrames: true },
       files: ['src/common/schema.js', 'src/content/fields.js', 'src/content/files.js',
-        'src/content/rules.js', 'src/content/filler.js', 'src/content/ui.js', 'src/content/main.js']
+        'src/content/rules.js', 'src/content/filler.js', 'src/content/rows.js', 'src/content/ui.js', 'src/content/main.js']
     });
     await chrome.scripting.insertCSS({ target: { tabId: tab.id, allFrames: true }, files: ['src/content/ui.css'] });
     return ask(type, opts, tries - 1);
@@ -114,6 +114,6 @@ function render(p) {
       view.insertBefore(n, view.firstChild);
     }
   } catch (e) {
-    message('Smartfill can\'t read this page. Chrome blocks extensions on its own pages and on the Web Store.', true);
+    message('Smartfill can\'t read this page (' + (e && e.message || 'unknown error') + '). Reload the tab once; Chrome also blocks extensions on its own pages and the Web Store.', true);
   }
 })();

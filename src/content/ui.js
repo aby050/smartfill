@@ -168,6 +168,44 @@
   }
 
 
+  /* ---- fit badge: Apply / Maybe / Skip, shown as soon as a job page is scored ---- */
+  const SCORE_STYLE = `
+  :host { all: initial; }
+  .b { position: fixed; right: 18px; bottom: 70px; z-index: 2147483646; display: flex; align-items: center;
+    gap: 9px; padding: 8px 14px 8px 8px; border-radius: 999px; cursor: pointer; color: #fff;
+    font: 600 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    box-shadow: 0 6px 20px rgba(0,0,0,.28); animation: pop .22s ease; border: 0; }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px); } }
+  .b.apply { background: #1f9d6b; } .b.maybe { background: #c58a1a; } .b.skip { background: #c0453b; }
+  .n { background: rgba(255,255,255,.22); border-radius: 999px; min-width: 30px; padding: 5px 7px;
+    text-align: center; font-size: 13px; }
+  .t { font-weight: 500; font-size: 12px; opacity: .95; }
+  .x { margin-left: 2px; opacity: .7; font-size: 14px; }
+  `;
+  let scoreHost = null;
+  function hideScore() { if (scoreHost) { scoreHost.remove(); scoreHost = null; } }
+  /** opts: { score, verdict: 'apply'|'maybe'|'skip', text, onClick } */
+  function showScore(opts) {
+    hideScore();
+    scoreHost = document.createElement('div');
+    scoreHost.className = 'sf-panel';
+    scoreHost.style.cssText = 'all:initial;position:fixed;z-index:2147483646;';
+    const r = scoreHost.attachShadow({ mode: 'open' });
+    const st = document.createElement('style');
+    st.textContent = SCORE_STYLE;
+    r.appendChild(st);
+    const b = document.createElement('button');
+    b.className = 'b ' + opts.verdict;
+    const n = document.createElement('span'); n.className = 'n'; n.textContent = String(opts.score);
+    const t = document.createElement('span'); t.className = 't'; t.textContent = opts.text;
+    const x = document.createElement('span'); x.className = 'x'; x.textContent = '\u00d7';
+    x.onclick = e => { e.stopPropagation(); hideScore(); };
+    b.append(n, t, x);
+    b.onclick = () => opts.onClick && opts.onClick();
+    r.appendChild(b);
+    document.documentElement.appendChild(scoreHost);
+  }
+
   function ensure() {
     hideLauncher();                 // the panel takes over the same corner
     if (host && host.isConnected) return;
@@ -410,5 +448,5 @@
 
   function toast(msg) { status(msg, false); setTimeout(close, 2600); }
 
-  globalThis.SF_UI = { status, showResults, close, mark, toast, highlight, showLauncher, hideLauncher };
+  globalThis.SF_UI = { status, showResults, close, mark, toast, highlight, showLauncher, hideLauncher, showScore, hideScore };
 })();

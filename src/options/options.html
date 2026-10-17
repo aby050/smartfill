@@ -50,6 +50,15 @@
     <label class="check"><input type="checkbox" id="confirmSensitive"> Never auto-fill identity documents — flag them for me instead</label>
     <label class="check"><input type="checkbox" id="attachResume"> Attach my resume to upload fields automatically</label>
     <label class="check"><input type="checkbox" id="aiPickRole"> Let Claude pick the role profile when keywords don't match <span class="need">needs a key</span></label>
+    <label class="check"><input type="checkbox" id="autoScore"> Score every job page against my resume and show <em>Apply / Maybe / Skip</em> <span class="need">needs a key</span></label>
+    <div class="row">
+      <label for="applyMin">Apply at or above</label><input type="number" id="applyMin" min="0" max="100" style="width:70px">
+      <label for="skipBelow">Skip below</label><input type="number" id="skipBelow" min="0" max="100" style="width:70px">
+    </div>
+    <label class="check"><input type="checkbox" id="autoApply"> <strong>Auto-apply</strong>: fill, click Next and submit by itself on jobs that score high enough. It stops and waits for you at any consent, ID field or required answer it can't fill.</label>
+    <div class="row">
+      <label for="autoApplyMin">Only auto-submit at or above</label><input type="number" id="autoApplyMin" min="0" max="100" style="width:70px">
+    </div>
     <div class="row">
       <label for="launcherOffHosts">No floating button on</label>
       <input type="text" id="launcherOffHosts" placeholder="dismissing the button on a site adds it here">
