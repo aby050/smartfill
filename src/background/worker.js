@@ -48,6 +48,95 @@ Rules:
 - Never output a password, OTP, card number or government ID, even if one appears in the profile.
 - Set confidence honestly. A field you are guessing at should score below 0.5 so it is discarded.`;
 
+
+/* ---------- provider layer ----------
+   One key field serves both providers: an Anthropic key starts "sk-ant", anything
+   else is treated as a Google Gemini key. Both calls are "force one tool call, read
+   back its arguments", so the rest of the worker doesn't care which one answered. */
+
+const GEMINI_MODEL = 'gemini-3.8-flash';
+const isGemini = key => !!key && !/^sk-ant/i.test(key);
+
+function geminiSchema(node) {
+  if (Array.isArray(node)) return node.map(geminiSchema);
+  if (!node || typeof node !== 'object') return node;
+  const out = {};
+  for (const [k, v] of Object.entries(node)) {
+    if (k === 'additionalProperties' || k === 'strict') continue;   // not in Gemini's schema subset
+    out[k] = k === 'type' && typeof v === 'string' ? v.toUpperCase() : geminiSchema(v);
+  }
+  return out;
+}
+
+/** content: Anthropic-style blocks ({type:'text'} / {type:'document', source:{base64}}). */
+async function callTool({ apiKey, model, system, tool, content, maxTokens, effort }) {
+  if (isGemini(apiKey)) {
+    const parts = content.map(b => b.type === 'document'
+      ? { inlineData: { mimeType: b.source.media_type, data: b.source.data } }
+      : { text: b.text });
+    let res;
+    try {
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: system }] },
+          contents: [{ role: 'user', parts }],
+          tools: [{ functionDeclarations: [{ name: tool.name, description: tool.description, parameters: geminiSchema(tool.input_schema) }] }],
+          toolConfig: { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: [tool.name] } },
+          generationConfig: { maxOutputTokens: maxTokens || 4000, temperature: 0.2 }
+        })
+      });
+    } catch (e) {
+      return { ok: false, error: 'Network error reaching Gemini: ' + (e.message || e) };
+    }
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      const hint = res.status === 400 || res.status === 403 ? ' (check the API key)' : res.status === 429 ? ' (rate limited — try again shortly)' : '';
+      return { ok: false, error: `Gemini API ${res.status}${hint}: ${(d.error && d.error.message || '').slice(0, 200)}` };
+    }
+    const data = await res.json();
+    const cand = (data.candidates || [])[0];
+    const call = cand && cand.content && (cand.content.parts || []).find(p => p.functionCall);
+    if (!call) return { ok: false, error: 'Gemini returned no structured answer' + (cand && cand.finishReason ? ` (${cand.finishReason})` : '') + '.' };
+    return { ok: true, input: call.functionCall.args || {}, usage: data.usageMetadata || null, model: GEMINI_MODEL };
+  }
+
+  let res;
+  try {
+    res = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': API_VERSION,
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model, max_tokens: maxTokens || 4000, system,
+        thinking: { type: 'disabled' },
+        ...(effort ? { output_config: { effort } } : {}),
+        tools: [tool],
+        tool_choice: { type: 'tool', name: tool.name },
+        messages: [{ role: 'user', content }]
+      })
+    });
+  } catch (e) {
+    return { ok: false, error: 'Network error reaching the Claude API: ' + (e.message || e) };
+  }
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.json()).error?.message || ''; } catch { detail = await res.text().catch(() => ''); }
+    const hint = res.status === 401 ? ' (check the API key)' : res.status === 429 ? ' (rate limited — try again shortly)' : '';
+    return { ok: false, error: `Claude API ${res.status}${hint}: ${detail.slice(0, 200)}` };
+  }
+  const data = await res.json();
+  if (data.stop_reason === 'refusal') return { ok: false, error: 'Claude declined: ' + (data.stop_details?.explanation || 'no reason given') };
+  const block = (data.content || []).find(b => b.type === 'tool_use');
+  if (!block || !block.input) return { ok: false, error: 'Claude returned no structured answer.' };
+  return { ok: true, input: block.input, usage: data.usage || null, model: data.model };
+}
+
 async function getKey() {
   const { apiKey } = await chrome.storage.local.get('apiKey');
   return apiKey || '';
@@ -55,7 +144,7 @@ async function getKey() {
 
 async function callClaude(payload) {
   const apiKey = await getKey();
-  if (!apiKey) return { ok: false, error: 'No API key set — open Smartfill options and paste your Anthropic key.' };
+  if (!apiKey) return { ok: false, error: 'No API key set — open Smartfill options and paste your Claude or Gemini key.' };
 
   const { settings } = await chrome.storage.local.get('settings');
   const model = (settings && settings.model) || DEFAULT_MODEL;
@@ -75,57 +164,13 @@ async function callClaude(payload) {
     JSON.stringify(payload.fields, null, 1)
   ].filter(Boolean).join('\n');
 
-  const body = {
-    model,
-    max_tokens: 8000,
-    system: SYSTEM,
-    thinking: { type: 'disabled' },
-    output_config: { effort: 'low' },
-    tools: [MAP_TOOL],
-    tool_choice: { type: 'tool', name: 'fill_fields' },
-    messages: [{ role: 'user', content: userText }]
-  };
+  const r = await callTool({ apiKey, model, system: SYSTEM, tool: MAP_TOOL,
+    content: [{ type: 'text', text: userText }], maxTokens: 8000, effort: 'low' });
+  if (!r.ok) return r;
+  const mappings = r.input.mappings;
+  if (!Array.isArray(mappings)) return { ok: false, error: 'The model returned no usable mapping.' };
 
-  let res;
-  try {
-    res = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': API_VERSION,
-        // Required for requests that originate from a browser context.
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify(body)
-    });
-  } catch (e) {
-    return { ok: false, error: 'Network error reaching the Claude API: ' + (e.message || e) };
-  }
-
-  if (!res.ok) {
-    let detail = '';
-    try { detail = (await res.json()).error?.message || ''; } catch { detail = await res.text().catch(() => ''); }
-    const hint = res.status === 401 ? ' (check the API key)' : res.status === 429 ? ' (rate limited — try again shortly)' : '';
-    return { ok: false, error: `Claude API ${res.status}${hint}: ${detail.slice(0, 200)}` };
-  }
-
-  const data = await res.json();
-  if (data.stop_reason === 'refusal') {
-    return { ok: false, error: 'Claude declined this page: ' + (data.stop_details?.explanation || 'no reason given') };
-  }
-
-  const toolBlock = (data.content || []).find(b => b.type === 'tool_use');
-  let mappings = toolBlock && toolBlock.input && toolBlock.input.mappings;
-  if (!mappings) {
-    // Defensive: if the model answered in text anyway, salvage the JSON.
-    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-    const m = /\{[\s\S]*\}/.exec(text);
-    if (m) { try { mappings = JSON.parse(m[0]).mappings; } catch { /* give up */ } }
-  }
-  if (!Array.isArray(mappings)) return { ok: false, error: 'Claude returned no usable mapping.' };
-
-  return { ok: true, mappings, usage: data.usage || null, model: data.model };
+  return { ok: true, mappings, usage: r.usage, model: r.model };
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
@@ -158,28 +203,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
 });
 
 async function testKey(apiKey, model) {
-  try {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': API_VERSION,
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: model || DEFAULT_MODEL,
-        max_tokens: 16,
-        thinking: { type: 'disabled' },
-        messages: [{ role: 'user', content: 'Reply with the word: ok' }]
-      })
-    });
-    if (res.ok) return { ok: true };
-    const d = await res.json().catch(() => ({}));
-    return { ok: false, error: `${res.status}: ${d.error?.message || 'rejected'}` };
-  } catch (e) {
-    return { ok: false, error: String(e.message || e) };
-  }
+  const ping = { name: 'ping', description: 'Reply ok.', input_schema: { type: 'object', properties: { ok: { type: 'string' } }, required: ['ok'] } };
+  const r = await callTool({ apiKey, model: model || DEFAULT_MODEL, system: 'Call the tool.', tool: ping,
+    content: [{ type: 'text', text: 'ok' }], maxTokens: 64 });
+  return r.ok ? { ok: true } : r;
 }
 
 /* Hand a stored resume to the content script as base64 — extension messaging
@@ -220,31 +247,13 @@ async function pickRole(payload) {
   const apiKey = await getKey();
   if (!apiKey || !payload.roles.length) return { ok: false };
   try {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': API_VERSION,
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5',
-        max_tokens: 300,
-        system: 'You match a job posting to one of a person\'s saved role profiles. Return an empty role_id if none is a reasonable fit — a wrong resume is worse than the default one.',
-        tools: [ROLE_TOOL],
-        tool_choice: { type: 'tool', name: 'choose_role' },
-        messages: [{
-          role: 'user',
-          content: `ROLES:\n${JSON.stringify(payload.roles, null, 1)}\n\nJOB PAGE:\n${payload.signal}`
-        }]
-      })
+    const r = await callTool({
+      apiKey, model: 'claude-haiku-4-5', maxTokens: 300, tool: ROLE_TOOL,
+      system: 'You match a job posting to one of a person\'s saved role profiles. Return an empty role_id if none is a reasonable fit — a wrong resume is worse than the default one.',
+      content: [{ type: 'text', text: `ROLES:\n${JSON.stringify(payload.roles, null, 1)}\n\nJOB PAGE:\n${payload.signal}` }]
     });
-    if (!res.ok) return { ok: false };
-    const data = await res.json();
-    const block = (data.content || []).find(b => b.type === 'tool_use');
-    const id = block && block.input && block.input.role_id;
-    return id ? { ok: true, roleId: id, reason: block.input.reason } : { ok: false };
+    const id = r.ok && r.input.role_id;
+    return id ? { ok: true, roleId: id, reason: r.input.reason } : { ok: false };
   } catch {
     return { ok: false };
   }
@@ -333,43 +342,11 @@ async function scoreFit(payload) {
     ].filter(Boolean).join('\n')
   });
 
-  try {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': API_VERSION,
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 2000,
-        system: FIT_SYSTEM,
-        thinking: { type: 'disabled' },
-        output_config: { effort: 'medium' },
-        tools: [FIT_TOOL],
-        tool_choice: { type: 'tool', name: 'report_fit' },
-        messages: [{ role: 'user', content }]
-      })
-    });
-
-    if (!res.ok) {
-      const d = await res.json().catch(() => ({}));
-      return { ok: false, error: `Claude API ${res.status}: ${(d.error && d.error.message || '').slice(0, 160)}` };
-    }
-    const data = await res.json();
-    if (data.stop_reason === 'refusal') return { ok: false, error: 'Claude declined to score this posting.' };
-
-    const block = (data.content || []).find(b => b.type === 'tool_use');
-    if (!block || !block.input) return { ok: false, error: 'Claude returned no score.' };
-
-    const fit = { ok: true, ...block.input, resumeId: payload.resumeId || null };
-    await chrome.storage.local.set({ [key]: { at: Date.now(), fit } });
-    return fit;
-  } catch (e) {
-    return { ok: false, error: 'Network error: ' + (e.message || e) };
-  }
+  const r = await callTool({ apiKey, model, system: FIT_SYSTEM, tool: FIT_TOOL, content, maxTokens: 2000, effort: 'medium' });
+  if (!r.ok) return r;
+  const fit = { ok: true, ...r.input, resumeId: payload.resumeId || null };
+  await chrome.storage.local.set({ [key]: { at: Date.now(), fit } });
+  return fit;
 }
 
 async function runOnActiveTab(opts) {
