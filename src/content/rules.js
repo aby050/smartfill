@@ -29,7 +29,7 @@
     ['altEmail', [/(alternate|alternative|secondary|other).?e.?mail/]],
     ['email', [/\be.?mail\b/, /\bemail address\b/], [/alternate/, /secondary/, /confirm/, /re.?enter/, /verify/]],
     ['altPhone', [/(alternate|alternative|secondary|other|work|home).?(phone|mobile|contact number)/]],
-    ['phone', [/\bphone\b/, /\bmobile\b/, /\btelephone\b/, /\bcontact number\b/, /\bcell\b/, /\bwhatsapp\b/], [/country.?code/, /extension/, /\bext\b/]],
+    ['phone', [/\bphone\b/, /\bmobile\b/, /\btelephone\b/, /\bcontact number\b/, /\bcell\b/, /\bwhatsapp\b/], [/country.?code/, /dial.?code/, /\bisd\b/, /extension/, /\bext\b/]],
 
     ['linkedin', [/linked.?in/, /\bli profile\b/,
       /(public|social|online|professional)?.?profile.?(url|link|address)/,
@@ -43,7 +43,8 @@
     ['city', [/\bcity\b/, /\btown\b/, /\blocality\b/, /\bdistrict\b/, /address.?level.?2/]],
     ['state', [/\bstate\b/, /\bprovince\b/, /\bregion\b/, /\bcounty\b/, /address.?level.?1/], [/statement/, /united states/, /marital/, /employment/]],
     ['postalCode', [/\bpostal.?code\b/, /\bzip\b/, /\bpin.?code\b/, /\bpostcode\b/], [/pin number/]],
-    ['countryCode', [/country.?code/, /\bisd\b/, /\bdial.?code\b/]],
+    ['dialCode', [/\bdial.?code\b/, /\bisd\b/, /calling code/, /phone.?code/, /country.?code.*(phone|mobile)|(phone|mobile).*country.?code/]],
+    ['countryCode', [/country.?code/]],
     ['country', [/\bcountry\b/, /\bnation\b/], [/code/, /nationality/]],
     ['fullAddress', [/\bfull address\b/, /\bcomplete address\b/, /\bmailing address\b/, /\bresidential address\b/, /^address$/]],
 

@@ -1,6 +1,23 @@
 /* Profile schema shared by the options page and the content script.
    Loaded as a plain script, so it publishes onto globalThis. */
 (function () {
+  const DIAL = { IN: '91', US: '1', CA: '1', GB: '44', AU: '61', NZ: '64', IE: '353', DE: '49', FR: '33', ES: '34',
+    IT: '39', NL: '31', PT: '351', BR: '55', MX: '52', AR: '54', CO: '57', CL: '56', PE: '51', AE: '971', SA: '966',
+    SG: '65', MY: '60', ID: '62', PH: '63', PK: '92', BD: '880', LK: '94', NP: '977', ZA: '27', NG: '234', KE: '254',
+    EG: '20', JP: '81', KR: '82', CN: '86', TR: '90', PL: '48', SE: '46', NO: '47', DK: '45', CH: '41', AT: '43' };
+  const DIAL_CODES = [...new Set(Object.values(DIAL))].sort((a, b) => b.length - a.length);
+  /** "+91" from a phone like "+919876543210", else from the ISO country code. */
+  function dialFor(p) {
+    const ph = String((p && p.phone) || '').replace(/[\s()-]/g, '');
+    if (/^\+/.test(ph)) {
+      const digits = ph.slice(1);
+      const hit = DIAL_CODES.find(c => digits.startsWith(c));
+      if (hit) return '+' + hit;
+    }
+    const iso = String((p && p.countryCode) || '').toUpperCase();
+    return DIAL[iso] ? '+' + DIAL[iso] : '';
+  }
+
   const SECTIONS = [
     {
       id: 'personal',
@@ -27,6 +44,8 @@
         { key: 'email', label: 'Email', type: 'email' },
         { key: 'altEmail', label: 'Alternate email', type: 'email' },
         { key: 'phone', label: 'Phone', hint: 'Include country code, e.g. +91 87700 39953' },
+        { key: 'dialCode', label: 'Phone country code', hint: 'e.g. +91. Leave blank to derive it from your phone number or country.',
+          derived: p => dialFor(p) },
         { key: 'altPhone', label: 'Alternate phone' },
         { key: 'website', label: 'Website' },
         { key: 'linkedin', label: 'LinkedIn URL' },

@@ -88,6 +88,67 @@
     return { ok: !!input.value, applied: input.value || hit.text };
   }
 
+  /* ---- ARIA combobox (MUI Autocomplete, Deel, many React design systems) ----
+     The input is role=combobox and its options only exist in a popup listbox once it
+     is opened. Open it the way a person does, read the real options, click the match;
+     on a long list, type to filter first. */
+  const textOf = li => (li.innerText || li.getAttribute('data-text') || '').replace(/\s+/g, ' ').trim();
+
+  function listboxOptions(input) {
+    const id = input.getAttribute('aria-controls');
+    const lb = (id && document.getElementById(id)) ||
+      [...document.querySelectorAll('[role=listbox]')].find(l => l.getBoundingClientRect().height > 0);
+    return lb ? [...lb.querySelectorAll('[role=option]')] : [];
+  }
+
+  async function openCombobox(input) {
+    input.focus();
+    for (const type of ['mousedown', 'mouseup', 'click']) {
+      input.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+    }
+    for (let i = 0; i < 24; i++) {
+      if (listboxOptions(input).length) return true;
+      await wait(60);
+    }
+    // Some widgets only open from the keyboard.
+    input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
+    for (let i = 0; i < 12; i++) {
+      if (listboxOptions(input).length) return true;
+      await wait(60);
+    }
+    return false;
+  }
+
+  async function fillCombobox(input, value) {
+    if (!(await openCombobox(input))) return { ok: false, reason: 'dropdown did not open' };
+
+    const read = () => listboxOptions(input).map((li, i) => ({ value: String(i), text: textOf(li) }));
+    let opts = read();
+    let hit = matchOption(value, opts);
+
+    // Long or searchable list and no direct hit: type it out to narrow the list.
+    if (!hit && String(value).length > 1) {
+      nativeSet(input, '');
+      for (const ch of String(value)) {
+        nativeSet(input, input.value + ch);
+        fire(input, ['input']);
+        await wait(40);
+      }
+      await wait(350);
+      opts = read();
+      hit = matchOption(value, opts) || (opts.length === 1 ? opts[0] : null);
+    }
+
+    if (!hit) {
+      input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+      document.body.click();
+      return { ok: false, reason: 'no matching option' };
+    }
+    listboxOptions(input)[Number(hit.value)].click();
+    await wait(120);
+    return { ok: true, applied: hit.text };
+  }
+
   const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june',
     'july', 'august', 'september', 'october', 'november', 'december'];
 
@@ -177,6 +238,7 @@
     try {
       focusRing(el);
 
+      if (field.kind === 'combobox') return fillCombobox(el, value);
       if (field.kind === 'uidropdown') return fillPrimeDropdown(el, value);
       if (field.kind === 'uicalendar') return fillPrimeCalendar(el, toIso(value));
       if (isPrimeAutocomplete(el)) return fillPrimeAutocomplete(el, value);

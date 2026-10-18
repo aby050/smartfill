@@ -123,6 +123,10 @@
     if (el.tagName === 'TEXTAREA') return 'textarea';
     if (el.isContentEditable) return 'richtext';
     const t = (el.type || 'text').toLowerCase();
+    // MUI / Headless / Deel-style autocompletes: a text input with role=combobox whose
+    // options live in a popup listbox, not in the DOM until it is opened.
+    if (el.tagName === 'INPUT' && el.getAttribute('role') === 'combobox' &&
+      !/(^|\s)(ui|p)-autocomplete-input(\s|$)/.test(el.className)) return 'combobox';
     if (t === 'checkbox') return 'checkbox';
     if (t === 'radio') return 'radio';
     return t; // text, email, tel, url, number, date, month, search, password

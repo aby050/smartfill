@@ -236,5 +236,10 @@ t('12 -> 7+', RU.matchOption('12', rng).text, '7+ years');
 t('5 -> 4-6', RU.matchOption('5', rng).text, '4 - 6 years');
 t('2 -> 1-3', RU.matchOption('2', rng).text, '1 - 3 years');
 
+group('dial code');
+t('dial from phone', S.resolve({ phone: '+919876543210' }).dialCode, '+91');
+t('dial from iso', S.resolve({ countryCode: 'GB' }).dialCode, '+44');
+t('dial code field is not phone', RU.score({ kind: 'combobox', haystack: 'dial code phonenumber dialcode', attrs: { type: '', autocomplete: '', name: 'phoneNumber_dialCode', id: '', placeholder: '' }, labels: ['Dial code'], options: null }, S.resolve({ phone: '+919876543210', email: 'a@b.c' })).key, 'dialCode');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
