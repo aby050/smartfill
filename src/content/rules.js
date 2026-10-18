@@ -216,6 +216,10 @@
     if (/^(false|no)$/i.test(value)) hit = cands.find(c => /^(no|n|false)$/.test(c.t));
     if (hit) return hit.o;
 
+    // A whole word/number beats a substring: "91" is "IN +91", not "BO +591".
+    hit = cands.find(c => c.t.split(' ').includes(want));
+    if (hit) return hit.o;
+
     hit = cands.find(c => c.t.startsWith(want) || want.startsWith(c.t));
     if (hit) return hit.o;
     hit = cands.find(c => c.t.includes(want) || (want.length > 3 && want.includes(c.t) && c.t.length > 3));

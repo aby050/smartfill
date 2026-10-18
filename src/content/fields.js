@@ -84,6 +84,35 @@
     return [...new Set(out.filter(Boolean))];
   }
 
+  const WEAK_LABEL_RE = /^(select( one| an option)?|choose|your answer|type (here|your)|enter|search|please select|--)/i;
+  const weakLabel = t => !t || t.length < 4 || WEAK_LABEL_RE.test(t.trim());
+
+  /** Controls under `node` that a person would see as separate questions. */
+  function questionCount(node) {
+    const seen = new Set();
+    for (const c of node.querySelectorAll('input, select, textarea, [role=combobox]')) {
+      if (c.type === 'hidden' || c.type === 'file') continue;
+      seen.add(c.type === 'radio' ? 'r:' + (c.name || c.id) : c);
+    }
+    return seen.size;
+  }
+
+  /* Plenty of design systems render the question as a bare <div> above the control
+     — no <label>, no aria-labelledby. Climb until the container holds exactly this
+     one question, then take the first real line of text in it. */
+  function contextQuestion(el) {
+    let n = el.closest('[role="radiogroup"]') || el;
+    for (let i = 0; i < 6; i++) {
+      n = n.parentElement;
+      if (!n || n === document.body) return '';
+      if (questionCount(n) > 1) return '';
+      const lines = (n.innerText || '').split('\n').map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+      const q = lines.find(l => l.length >= 8 && !weakLabel(l));
+      if (q) return q.replace(/\s*\*\s*$/, '').slice(0, 200);
+    }
+    return '';
+  }
+
   function groupLabel(el) {
     const fs = el.closest('fieldset');
     if (fs) {
@@ -155,8 +184,14 @@
         seenRadioGroups.add(gk);
       }
 
-      const labels = labelFor(el);
-      const group = groupLabel(el);
+      let labels = labelFor(el);
+      let group = groupLabel(el);
+      // Radio options are labelled "1 - 3 years"; the question sits above the group.
+      if (kind === 'radio' && !group) group = contextQuestion(el);
+      else if (kind !== 'radio' && labels.every(weakLabel)) {
+        const q = contextQuestion(el);
+        if (q) labels = [q, ...labels];
+      }
       const attrs = {
         name: el.name || '',
         id: el.id || '',

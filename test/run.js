@@ -241,5 +241,9 @@ t('dial from phone', S.resolve({ phone: '+919876543210' }).dialCode, '+91');
 t('dial from iso', S.resolve({ countryCode: 'GB' }).dialCode, '+44');
 t('dial code field is not phone', RU.score({ kind: 'combobox', haystack: 'dial code phonenumber dialcode', attrs: { type: '', autocomplete: '', name: 'phoneNumber_dialCode', id: '', placeholder: '' }, labels: ['Dial code'], options: null }, S.resolve({ phone: '+919876543210', email: 'a@b.c' })).key, 'dialCode');
 
+group('dial option exactness');
+const dial = ['BO +591','ER +291','IN +91'].map(x => ({ text: x, value: x }));
+t('+91 picks IN not BO', RU.matchOption('+91', dial).text, 'IN +91');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
