@@ -221,6 +221,11 @@
         results.push(...att.rows);
       }
 
+      // Sites that parse an uploaded resume (Deel, Greenhouse…) overwrite the name and
+      // contact fields a moment later, with whatever they read from the PDF. Put our
+      // values back if that happens, unless the person is typing in the field.
+      if (resumeUsed) reassertAfterParse(results);
+
       if (!results.length) {
         UI.status(fields.length ? 'Every field is already filled. Run again with overwrite to replace them.' : 'No fillable fields found here.', false);
         return { blockers: [], filled: 0 };
@@ -277,6 +282,21 @@
       return null;
     } finally {
       running = false;
+    }
+  }
+
+  async function reassertAfterParse(results) {
+    const TEXTY = new Set(['text', 'email', 'tel', 'url', 'number', 'search', 'textarea']);
+    for (const wait of [2500, 3500, 5000]) {
+      await new Promise(r => setTimeout(r, wait));
+      for (const r of results) {
+        const el = r.field && r.field.el;
+        if (!r.ok || r.isFile || !r.value || !el || !el.isConnected || !TEXTY.has(r.field.kind)) continue;
+        if (document.activeElement === el) continue;
+        if (currentValue(el) !== String(r.value)) {
+          try { await fill(r.field, r.value); } catch { /* element replaced */ }
+        }
+      }
     }
   }
 

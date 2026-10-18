@@ -224,5 +224,17 @@ t('12-digit value skipped', S.worthLearning('document number', '1234 5678 9012',
 t('long value skipped', S.worthLearning('anything here', 'x'.repeat(201), 'text'), false);
 t('learned beats nothing, longest wins', S.matchAnswer([{match:'ctc',value:'a'},{match:'expected ctc',value:'b'}], 'expected ctc (lpa)').value, 'b');
 
+/* ---- linkedin URL vs handle ---- */
+group('linkedin shaping');
+const liField = (ph, hay) => ({ haystack: hay, attrs: { placeholder: ph, maxlength: null } });
+t('url placeholder keeps full url', RU.shapeUrl('https://www.linkedin.com/in/abhay050/', liField('https://linkedin.com/in/...', 'linkedin profile \n sf id sf26'), 'linkedin'), 'https://www.linkedin.com/in/abhay050');
+t('handle label gets handle', RU.shapeUrl('https://www.linkedin.com/in/abhay050/', liField('', 'linkedin username'), 'linkedin'), 'abhay050');
+
+group('numeric range options');
+const rng = ['1 - 3 years','4 - 6 years','7+ years'].map(x => ({ text: x, value: x }));
+t('12 -> 7+', RU.matchOption('12', rng).text, '7+ years');
+t('5 -> 4-6', RU.matchOption('5', rng).text, '4 - 6 years');
+t('2 -> 1-3', RU.matchOption('2', rng).text, '1 - 3 years');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -162,7 +162,7 @@
         maxlength: el.maxLength > 0 ? el.maxLength : null,
         required: el.required || el.getAttribute('aria-required') === 'true',
         pattern: el.getAttribute('pattern') || '',
-        dataFields: Object.entries(el.dataset || {}).map(([k, v]) => `${k}=${v}`).slice(0, 5).join(' ')
+        dataFields: Object.entries(el.dataset || {}).filter(([k]) => k !== 'sfId').map(([k, v]) => `${k}=${v}`).slice(0, 5).join(' ')
       };
 
       const haystack = [

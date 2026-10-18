@@ -167,9 +167,11 @@
   function shapeUrl(v, field, key) {
     v = v.trim();
     const hint = (field.haystack + ' ' + (field.attrs.placeholder || '')).toLowerCase();
-    const wantsHandle = /\b(handle|username|user name|id)\b/.test(hint) ||
+    // A placeholder that is itself a URL means the site wants the full URL, whatever else the hint says.
+    const urlPlaceholder = /^https?:\/\//i.test(field.attrs.placeholder || '');
+    const wantsHandle = !urlPlaceholder && (/\b(handle|username|user name)\b/.test(hint) ||
       /linkedin\.com\/in\/?$/.test(field.attrs.placeholder || '') ||
-      (field.attrs.maxlength && field.attrs.maxlength < 40);
+      (field.attrs.maxlength && field.attrs.maxlength < 40));
 
     if (key === 'linkedin') {
       // Accept anything the user typed: a full URL, "in/abhay", or a bare handle.
@@ -195,6 +197,18 @@
 
     let hit = cands.find(c => c.t === want || c.v === want);
     if (hit) return hit.o;
+
+    // A number against range options: 12 -> "7+ years", 5 -> "4 - 6 years", 0.5 -> "Less than 1 year".
+    if (/^\d+(\.\d+)?$/.test(String(value).trim())) {
+      const n = Number(value);
+      for (const c of cands) {
+        const txt = String(c.o.text || c.o.value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        let m;
+        if ((m = /^(\d+)\s*(?:-|–|to)\s*(\d+)/.exec(txt)) && n >= +m[1] && n <= +m[2] + 0.99) return c.o;   // "4 - 6 years"
+        if ((m = /^(\d+)\s*(\+|plus|or more)/.exec(txt)) && n >= +m[1]) return c.o;                         // "7+ years"
+        if ((m = /^(?:less than|under|below)\s*(\d+)/.exec(txt)) && n < +m[1]) return c.o;                    // "Less than 1 year"
+      }
+    }
 
     // Booleans expressed as yes/no options.
     if (/^(true|yes)$/i.test(value)) hit = cands.find(c => /^(yes|y|true)$/.test(c.t));
