@@ -96,8 +96,8 @@
 
   function listboxOptions(input) {
     const id = input.getAttribute('aria-controls');
-    const lb = (id && document.getElementById(id)) ||
-      [...document.querySelectorAll('[role=listbox]')].find(l => l.getBoundingClientRect().height > 0);
+    const lb = (id && (input.getRootNode().getElementById(id) || document.getElementById(id))) ||
+      [...globalThis.SF_DOM.deepAll('[role=listbox]')].find(l => l.getBoundingClientRect().height > 0);
     return lb ? [...lb.querySelectorAll('[role=option]')] : [];
   }
 
@@ -252,7 +252,7 @@
       if (field.kind === 'radio') {
         const opt = matchOption(value, field.options);
         if (!opt) return { ok: false, reason: 'no matching option' };
-        const target = [...document.querySelectorAll(`input[type=radio][name="${el.name}"]`)]
+        const target = [...el.getRootNode().querySelectorAll(`input[type=radio][name="${el.name}"]`)]
           .find(r => r.value === opt.value);
         if (!target) return { ok: false, reason: 'no matching option' };
         target.click();

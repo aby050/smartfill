@@ -245,5 +245,10 @@ group('dial option exactness');
 const dial = ['BO +591','ER +291','IN +91'].map(x => ({ text: x, value: x }));
 t('+91 picks IN not BO', RU.matchOption('+91', dial).text, 'IN +91');
 
+group('open-ended ranges');
+const yrs = ['No experience','1+ year','2+ year','7+ year','10+ year','11+ year'].map(x => ({ text: x, value: x }));
+t('12 -> 11+ not 1+', RU.matchOption('12', yrs).text, '11+ year');
+t('8 -> 7+', RU.matchOption('8', yrs).text, '7+ year');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

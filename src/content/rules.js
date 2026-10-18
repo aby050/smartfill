@@ -54,12 +54,12 @@
     ['maritalStatus', [/\bmarital\b/, /\bmarriage status\b/]],
     ['nationality', [/\bnationality\b/, /\bcitizenship\b/, /\bcitizen of\b/]],
 
-    ['currentTitle', [/\b(current |present )?(job )?title\b/, /\bdesignation\b/, /\bposition held\b/, /\brole\b/, /\boccupation\b/],
+    ['currentTitle', [/\b(current |present )?(job )?title\b/, /\b(current|present) (position|role|designation)\b/, /\bdesignation\b/, /\bposition held\b/, /\brole\b/, /\boccupation\b/],
       [/title of/, /mr\b/, /honorific/, /job you/, /position applied/, /applying/]],
     ['currentCompany', [/\b(current |present )?(company|employer|organi[sz]ation)\b/, /\bworking at\b/], [/previous/, /school/, /college/]],
     ['yearsExperience', [/years? of experience/, /\btotal experience\b/, /\bexperience \(years\)/, /\byrs? exp\b/, /\bwork experience\b/]],
     ['noticePeriod', [/notice period/, /how soon can you join/, /availability to join/]],
-    ['expectedSalary', [/expected (ctc|salary|compensation|pay)/, /salary expectation/, /desired salary/]],
+    ['expectedSalary', [/expected (ctc|salary|compensation|pay)/, /\badd salary\b/, /\bdesired (pay|rate)\b/, /salary expectation/, /desired salary/]],
     ['currentSalary', [/current (ctc|salary|compensation|pay)/, /present salary/]],
     ['startDate', [/start date/, /available from/, /earliest.*(start|join)/, /joining date/]],
     ['workAuth', [/work authori[sz]ation/, /authorized to work/, /legally (eligible|authorized) to work/, /right to work/]],
@@ -200,15 +200,18 @@
     if (hit) return hit.o;
 
     // A number against range options: 12 -> "7+ years", 5 -> "4 - 6 years", 0.5 -> "Less than 1 year".
+    // For open-ended "N+" options take the largest N that still fits, not the first.
     if (/^\d+(\.\d+)?$/.test(String(value).trim())) {
       const n = Number(value);
+      let open = null;
       for (const c of cands) {
         const txt = String(c.o.text || c.o.value || '').toLowerCase().replace(/\s+/g, ' ').trim();
         let m;
         if ((m = /^(\d+)\s*(?:-|–|to)\s*(\d+)/.exec(txt)) && n >= +m[1] && n <= +m[2] + 0.99) return c.o;   // "4 - 6 years"
-        if ((m = /^(\d+)\s*(\+|plus|or more)/.exec(txt)) && n >= +m[1]) return c.o;                         // "7+ years"
         if ((m = /^(?:less than|under|below)\s*(\d+)/.exec(txt)) && n < +m[1]) return c.o;                    // "Less than 1 year"
+        if ((m = /^(\d+)\s*(\+|plus|or more)/.exec(txt)) && n >= +m[1] && (!open || +m[1] > open.min)) open = { min: +m[1], o: c.o };
       }
+      if (open) return open.o;
     }
 
     // Booleans expressed as yes/no options.

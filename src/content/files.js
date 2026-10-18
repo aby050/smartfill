@@ -15,7 +15,7 @@
     const bits = [];
     if (el.id) {
       const esc = (window.CSS && CSS.escape) ? CSS.escape(el.id) : el.id;
-      document.querySelectorAll(`label[for="${esc}"]`).forEach(l => bits.push(l.innerText || ''));
+      el.getRootNode().querySelectorAll(`label[for="${esc}"]`).forEach(l => bits.push(l.innerText || ''));
     }
     const lab = el.closest('label');
     if (lab) bits.push(lab.innerText || '');
@@ -42,9 +42,9 @@
   /** File inputs, including the invisible ones behind a styled dropzone. */
   function collectFileInputs() {
     const out = [];
-    for (const el of document.querySelectorAll('input[type=file]')) {
+    for (const el of globalThis.SF_DOM.deepAll('input[type=file]')) {
       if (el.disabled) continue;
-      if (el.closest('.sf-panel')) continue;
+      if (globalThis.SF_DOM.inOurUi(el)) continue;
       const text = nearbyText(el);
       const sfid = 'sff' + (++seq);
       el.setAttribute('data-sf-file', sfid);
@@ -66,9 +66,9 @@
   function collectDropzones(known) {
     if (known.length) return [];               // an input is always the better target
     const out = [];
-    const cands = document.querySelectorAll('[class*=drop], [class*=drag], [class*=upload], [data-testid*=upload]');
+    const cands = globalThis.SF_DOM.deepAll('[class*=drop], [class*=drag], [class*=upload], [data-testid*=upload]');
     for (const el of cands) {
-      if (el.closest('.sf-panel') || !isVisible(el)) continue;
+      if (globalThis.SF_DOM.inOurUi(el) || !isVisible(el)) continue;
       const t = (el.innerText || '').replace(/\s+/g, ' ').trim();
       if (!t || t.length > 240) continue;
       if (!DROP_RE.test(t) || !RESUME_RE.test(t)) continue;

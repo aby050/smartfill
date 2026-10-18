@@ -22,6 +22,51 @@
 
   let seq = 0;
 
+  /* ---- shadow DOM ----
+     Some careers pages (careers-page.com among them) mount the whole application
+     form inside an open shadow root, which document.querySelectorAll never enters.
+     deepAll walks every open root, skipping other extensions' injected widgets and
+     our own panel. */
+  const FOREIGN_HOST_RE = /(extension|wordtune|grammarly|lastpass|1password|bitwarden|dashlane|honey|loom|swooped|simplify|jobscan|teal)/i;
+  const foreignHost = h => FOREIGN_HOST_RE.test((h.tagName || '') + ' ' + (h.id || '') + ' ' + (typeof h.className === 'string' ? h.className : ''));
+
+  function deepAll(selector, root) {
+    root = root || document;
+    const out = [...root.querySelectorAll(selector)];
+    for (const host of root.querySelectorAll('*')) {
+      if (!host.shadowRoot || foreignHost(host) || (host.classList && host.classList.contains('sf-panel'))) continue;
+      out.push(...deepAll(selector, host.shadowRoot));
+    }
+    return out;
+  }
+
+  /** Is this node inside our own floating panel? (closest() cannot cross a shadow boundary.) */
+  function inOurUi(el) {
+    let n = el;
+    while (n) {
+      if (n.classList && n.classList.contains('sf-panel')) return true;
+      const r = n.getRootNode && n.getRootNode();
+      n = n.parentElement || (r && r.host) || null;
+    }
+    return false;
+  }
+
+  /* Radix/shadcn selects: a <button role=combobox> is what people see, and an
+     aria-hidden 1x1 native <select> beside it carries the real options and value.
+     Setting the select and firing change is how the framework itself syncs, so that
+     select is the control to drive — and the button's text is its true state. */
+  function proxyButton(el) {
+    if (!el || el.tagName !== 'SELECT' || el.getAttribute('aria-hidden') !== 'true') return null;
+    const p = el.parentElement;
+    return p ? p.querySelector(':scope > button[role=combobox], :scope > * button[role=combobox]') : null;
+  }
+
+  function deepActive() {
+    let a = document.activeElement;
+    while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement;
+    return a;
+  }
+
   function visible(el) {
     if (!el.isConnected) return false;
     if (el.disabled || el.readOnly) return false;
@@ -52,7 +97,7 @@
     const id = el.id;
     if (id) {
       const esc = (window.CSS && CSS.escape) ? CSS.escape(id) : id.replace(/"/g, '\\"');
-      for (const l of document.querySelectorAll(`label[for="${esc}"]`)) out.push(textOf(l));
+      for (const l of el.getRootNode().querySelectorAll(`label[for="${esc}"]`)) out.push(textOf(l));
     }
     const wrap = el.closest('label');
     if (wrap) out.push(textOf(wrap));
@@ -61,10 +106,10 @@
     if (al) out.push(al.trim());
 
     const lb = el.getAttribute('aria-labelledby');
-    if (lb) for (const ref of lb.split(/\s+/)) out.push(textOf(document.getElementById(ref)));
+    if (lb) for (const ref of lb.split(/\s+/)) out.push(textOf(el.getRootNode().getElementById(ref)));
 
     const db = el.getAttribute('aria-describedby');
-    if (db) for (const ref of db.split(/\s+/)) out.push(textOf(document.getElementById(ref)));
+    if (db) for (const ref of db.split(/\s+/)) out.push(textOf(el.getRootNode().getElementById(ref)));
 
     if (!out.filter(Boolean).length) {
       // Fall back to nearby text: previous sibling, or the container's first text.
@@ -92,6 +137,9 @@
     const seen = new Set();
     for (const c of node.querySelectorAll('input, select, textarea, [role=combobox]')) {
       if (c.type === 'hidden' || c.type === 'file') continue;
+      if (c.getAttribute('aria-hidden') === 'true') continue;               // the hidden twin of a custom select
+      const r = c.getBoundingClientRect();
+      if (!r.width && !r.height && c.type !== 'radio' && c.type !== 'checkbox') continue;
       seen.add(c.type === 'radio' ? 'r:' + (c.name || c.id) : c);
     }
     return seen.size;
@@ -135,7 +183,7 @@
         .map(o => ({ value: o.value, text: o.text.replace(/\s+/g, ' ').trim() }));
     }
     if (el.type === 'radio' && el.name) {
-      const peers = [...el.form ? el.form.elements : document.querySelectorAll(`input[type=radio][name="${el.name}"]`)]
+      const peers = [...el.form ? el.form.elements : el.getRootNode().querySelectorAll(`input[type=radio][name="${el.name}"]`)]
         .filter(x => x.type === 'radio' && x.name === el.name);
       return peers.slice(0, 60).map(p => ({ value: p.value, text: (labelFor(p)[0] || p.value || '').slice(0, 80) }));
     }
@@ -162,15 +210,15 @@
   }
 
   function collect(root = document) {
-    const els = [...root.querySelectorAll(
-      'input, select, textarea, [contenteditable="true"], [role="textbox"], p-dropdown, p-calendar')];
+    const els = deepAll(
+      'input, select, textarea, [contenteditable="true"], [role="textbox"], p-dropdown, p-calendar', root);
     const seenRadioGroups = new Set();
     const out = [];
 
     for (const el of els) {
       if (el.tagName === 'INPUT' && SKIP_TYPES.has((el.type || '').toLowerCase())) continue;
-      if (el.closest('.sf-panel')) continue;
-      if (!visible(el)) continue;
+      if (inOurUi(el)) continue;
+      if (!visible(el) && !proxyButton(el)) continue;
 
       const kind = kindOf(el);
       if (kind === 'password') continue;
@@ -239,6 +287,11 @@
   }
 
   function currentValue(el) {
+    const pb = proxyButton(el);
+    if (pb) {
+      const t = (pb.innerText || '').trim();
+      return /^(-|—|–|select.*|choose.*|please.*)?$/i.test(t) ? '' : t;
+    }
     const tag = el.tagName.toLowerCase();
     if (tag === 'p-dropdown') {
       const lab = el.querySelector('.ui-dropdown-label, .p-dropdown-label');
@@ -255,7 +308,7 @@
     if (el.isContentEditable) return el.textContent.trim();
     if (el.type === 'checkbox') return el.checked ? 'on' : '';
     if (el.type === 'radio') {
-      const peers = document.querySelectorAll(`input[type=radio][name="${el.name}"]`);
+      const peers = el.getRootNode().querySelectorAll(`input[type=radio][name="${el.name}"]`);
       for (const p of peers) if (p.checked) return p.value;
       return '';
     }
@@ -281,4 +334,5 @@
   }
 
   globalThis.SF_FIELDS = { collect, serialize, currentValue, humanize };
+  globalThis.SF_DOM = { deepAll, inOurUi, deepActive };
 })();

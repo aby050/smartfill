@@ -292,7 +292,7 @@
       for (const r of results) {
         const el = r.field && r.field.el;
         if (!r.ok || r.isFile || !r.value || !el || !el.isConnected || !TEXTY.has(r.field.kind)) continue;
-        if (document.activeElement === el) continue;
+        if (globalThis.SF_DOM.deepActive() === el) continue;
         if (currentValue(el) !== String(r.value)) {
           try { await fill(r.field, r.value); } catch { /* element replaced */ }
         }
@@ -385,7 +385,7 @@
 
   function visibleButtons() {
     const out = [];
-    for (const el of document.querySelectorAll('button, input[type=submit], input[type=button], a[role=button], [role=button]')) {
+    for (const el of globalThis.SF_DOM.deepAll('button, input[type=submit], input[type=button], a[role=button], [role=button]')) {
       if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
       const r = el.getBoundingClientRect();
       if (!r.width || !r.height) continue;
@@ -548,8 +548,8 @@
 
   async function onUserChange(ev) {
     if (!ev.isTrusted) return;
-    const t = ev.target;
-    if (!t || !t.matches || !t.matches('input, select, textarea') || t.closest('.sf-panel')) return;
+    const t = (ev.composedPath && ev.composedPath()[0]) || ev.target;
+    if (!t || !t.matches || !t.matches('input, select, textarea') || globalThis.SF_DOM.inOurUi(t)) return;
     const st = await load();
     if (!st.settings.learnFromTyping) return;
     if ((st.settings.blockedHosts || []).some(h => h && location.hostname.includes(h))) return;
@@ -652,11 +652,13 @@
   if (window.top === window) {
     chrome.storage.local.get('settings').then(({ settings }) => {
       if (settings && settings.autofillOnLoad) {
-        setTimeout(() => { if (document.querySelector('form input, form select')) run(); }, 900);
+        setTimeout(() => { if (globalThis.SF_DOM.deepAll('input, select').length > 1) run(); }, 900);
       }
     });
 
     scheduleLauncher(700);
+    // Forms inside shadow roots (or rendered late) fire no mutation we can see.
+    for (const ms of [2500, 5000, 9000, 15000]) setTimeout(() => scheduleLauncher(0), ms);
     setTimeout(() => considerScore().catch(() => {}), 1200);
     // Single-page apps (and booking sites in particular) render the real form
     // well after load, so keep watching — debounced, and only when inputs change.
