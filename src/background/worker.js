@@ -84,7 +84,8 @@ async function callTool({ apiKey, model, system, tool, content, maxTokens, effor
           contents: [{ role: 'user', parts }],
           tools: [{ functionDeclarations: [{ name: tool.name, description: tool.description, parameters: geminiSchema(tool.input_schema) }] }],
           toolConfig: { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: [tool.name] } },
-          generationConfig: { maxOutputTokens: maxTokens || 4000, temperature: 0.2 }
+          // Gemini's hidden thinking tokens count against the output cap, so never go low.
+          generationConfig: { maxOutputTokens: Math.max(maxTokens || 0, 8192), temperature: 0.2 }
         })
       });
     } catch (e) {
