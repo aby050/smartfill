@@ -130,6 +130,7 @@
     launcherOffHosts: [],
     aiPickRole: true,
     blockedHosts: [],
+    learnFromTyping: true,  // remember answers typed by hand into fields Smartfill could not place
     autoScore: true,        // score every job page against the resume as it loads
     applyMin: 70,           // score at or above -> "Apply"
     skipBelow: 50,          // score below -> "Skip"; in between -> "Maybe"
@@ -146,6 +147,22 @@
     if (n >= s.applyMin) return 'apply';
     if (n < s.skipBelow) return 'skip';
     return 'maybe';
+  }
+
+  /** A question's label reduced to a stable key: lower-case, no asterisks / "(required)" / colon. */
+  function learnKey(label) {
+    return String(label || '').toLowerCase().replace(/\(required\)|\(optional\)|[*:]/g, ' ')
+      .replace(/\s+/g, ' ').trim().slice(0, 90);
+  }
+  const NEVER_LEARN_RE = /(aadhaar|aadhar|\bpan\b|passport|ssn|social security|tax.?id|licen[cs]e|password|otp|cvv|card|captcha|signature)/i;
+  /** Is this hand-typed value worth keeping for next time? */
+  function worthLearning(key, value, kind) {
+    const v = String(value || '').trim();
+    if (key.length < 4 || !v || v.length > 200) return false;
+    if (kind === 'textarea' || kind === 'richtext') return false;   // job-specific prose; Claude writes those
+    if (NEVER_LEARN_RE.test(key)) return false;
+    if (/^\d{12}$/.test(v.replace(/\s/g, ''))) return false;       // looks like an ID number
+    return true;
   }
 
   const SUBMIT_RE = /^(submit( my)?( application)?|apply( now)?|send( my)?( application)?|finish|complete application)$/i;
@@ -280,6 +297,6 @@
   globalThis.SF_SCHEMA = {
     SECTIONS, ALL_FIELDS, SENSITIVE_KEYS, resolve, DEFAULT_SETTINGS,
     ROLE_OVERRIDE_KEYS, matchRole, applyRole, matchAnswer, COMMON_ANSWERS,
-    PASSENGER_FIELDS, passengerKeyFor, verdictFor, buttonRole
+    PASSENGER_FIELDS, passengerKeyFor, verdictFor, buttonRole, learnKey, worthLearning
   };
 })();

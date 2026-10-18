@@ -213,5 +213,16 @@ t('Next', S.buttonRole('Next'), 'next');
 t('Cancel is not a step', S.buttonRole('Cancel'), null);
 t('long marketing text', S.buttonRole('Apply now and get a free resume review today'), null);
 
+/* ---- learning from typing ---- */
+group('learn from typing');
+t('key strips asterisk/colon', S.learnKey('Expected CTC (LPA) *:'), 'expected ctc (lpa)');
+t('plain answer kept', S.worthLearning('expected ctc', '30 lpa', 'text'), true);
+t('too short label', S.worthLearning('ctc', '30', 'text'), false);
+t('textarea skipped', S.worthLearning('why this role', 'x', 'textarea'), false);
+t('aadhaar label skipped', S.worthLearning('aadhaar number', '123', 'text'), false);
+t('12-digit value skipped', S.worthLearning('document number', '1234 5678 9012', 'text'), false);
+t('long value skipped', S.worthLearning('anything here', 'x'.repeat(201), 'text'), false);
+t('learned beats nothing, longest wins', S.matchAnswer([{match:'ctc',value:'a'},{match:'expected ctc',value:'b'}], 'expected ctc (lpa)').value, 'b');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

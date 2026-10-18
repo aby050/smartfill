@@ -7,19 +7,20 @@
   const RULES = globalThis.SF_RULES;
   const { fill } = globalThis.SF_FILLER;
   const UI = globalThis.SF_UI;
-  const { SENSITIVE_KEYS, resolve, applyRole, matchRole, matchAnswer, DEFAULT_SETTINGS, verdictFor, buttonRole } = globalThis.SF_SCHEMA;
+  const { SENSITIVE_KEYS, resolve, applyRole, matchRole, matchAnswer, DEFAULT_SETTINGS, verdictFor, buttonRole, learnKey, worthLearning } = globalThis.SF_SCHEMA;
 
   let undoStack = [];
   let running = false;
 
   async function load() {
-    const got = await chrome.storage.local.get(['profile', 'settings', 'roles', 'answers']);
+    const got = await chrome.storage.local.get(['profile', 'settings', 'roles', 'answers', 'learned']);
     return {
       raw: got.profile || {},
       settings: { ...DEFAULT_SETTINGS, ...(got.settings || {}) },
       roles: got.roles || [],
       answers: (got.answers || []).filter(a => a.match && a.value),
-      passengers: got.passengers || []
+      passengers: got.passengers || [],
+      learned: got.learned || []
     };
   }
 
@@ -81,7 +82,7 @@
     if (running) return null;
     running = true;
     try {
-      const { raw, settings, roles, answers, passengers } = await load();
+      const { raw, settings, roles, answers, passengers, learned } = await load();
       if ((settings.blockedHosts || []).some(h => h && location.hostname.includes(h))) {
         UI.status('Smartfill is disabled on this site.', false);
         return null;
@@ -126,7 +127,10 @@
         if (m && m.score >= 0.7) {
           results.push({ field: f, key: m.key, value: RULES.shape(profile[m.key], f, m.key), via: m.via });
         } else {
-          unresolved.push(f);
+          // Something the person typed by hand on an earlier form beats asking the model.
+          const lm = matchAnswer(learned, f.haystack);
+          if (lm) results.push({ field: f, key: 'learned', value: lm.value, via: 'saved' });
+          else unresolved.push(f);
         }
       }
 
@@ -436,7 +440,7 @@
   }
 
   async function preview() {
-    const { raw, settings, roles, answers, passengers } = await load();
+    const { raw, settings, roles, answers, passengers, learned } = await load();
     if ((settings.blockedHosts || []).some(h => h && location.hostname.includes(h))) {
       return { ok: true, blocked: true };
     }
@@ -451,7 +455,7 @@
       if (matchAnswer(answers, f.haystack)) { ready++; continue; }
       if (f.isConsent) { consents++; continue; }
       const m = RULES.score(f, profile);
-      if (m && m.score >= 0.7) ready++; else unknown++;
+      if ((m && m.score >= 0.7) || matchAnswer(learned, f.haystack)) ready++; else unknown++;
     }
 
     const rows = ROWS.findRows().length;
@@ -499,6 +503,67 @@
     return true;
   });
 
+  /* ---- learning from what you type ----
+     A real keystroke or click (event.isTrusted) on a field is the person answering
+     it themselves. When the rules had no answer for that question, remember it so
+     the next form that asks the same thing is filled. Synthetic events from our own
+     filler are untrusted and never recorded. Consents, ID numbers, free-text prose
+     and credentials are never kept. */
+
+  let learnTimer = null;
+  const pendingLearn = new Map();
+
+  async function flushLearn() {
+    const batch = [...pendingLearn.values()];
+    pendingLearn.clear();
+    if (!batch.length) return;
+    const { learned = [] } = await chrome.storage.local.get('learned');
+    for (const b of batch) {
+      const i = learned.findIndex(x => x.match === b.match);
+      const rec = { match: b.match, value: b.value, host: location.hostname, at: Date.now() };
+      if (i >= 0) learned[i] = rec; else learned.push(rec);
+    }
+    await chrome.storage.local.set({ learned: learned.slice(-400) });
+  }
+
+  async function onUserChange(ev) {
+    if (!ev.isTrusted) return;
+    const t = ev.target;
+    if (!t || !t.matches || !t.matches('input, select, textarea') || t.closest('.sf-panel')) return;
+    const st = await load();
+    if (!st.settings.learnFromTyping) return;
+    if ((st.settings.blockedHosts || []).some(h => h && location.hostname.includes(h))) return;
+
+    const f = collect().find(x => x.el === t ||
+      (x.kind === 'radio' && t.type === 'radio' && x.el.name === t.name));
+    if (!f || f.isConsent || f.kind === 'checkbox') return;
+
+    let value = currentValue(t);
+    if (f.kind === 'select') {
+      const o = t.options[t.selectedIndex];
+      value = o ? (o.text || o.value).trim() : '';
+    } else if (f.kind === 'radio' && f.options) {
+      const o = f.options.find(x => x.value === t.value);
+      value = o ? (o.text || o.value) : t.value;
+    }
+
+    const key = learnKey(f.labels[0] || f.label);
+    if (!worthLearning(key, value, f.kind)) return;
+
+    // If the profile already answers this, there is nothing new to remember.
+    let profile = resolve(st.raw);
+    profile = applyRole(profile, (st.roles || []).find(r => r.pinned) || null);
+    const m = RULES.score(f, profile);
+    if (m && m.score >= 0.7) return;
+    if (matchAnswer(st.answers, f.haystack)) return;
+
+    pendingLearn.set(key, { match: key, value: String(value).trim() });
+    clearTimeout(learnTimer);
+    learnTimer = setTimeout(() => flushLearn().catch(() => {}), 1500);
+  }
+
+  document.addEventListener('change', e => { onUserChange(e).catch(() => {}); }, true);
+
   /* ---- floating launcher ----
      Watches for a form to appear — including one a single-page app renders long
      after load — and offers to fill it in place, so the toolbar menu is optional.
@@ -517,7 +582,7 @@
     if ((st.blockedHosts || []).some(h => h && location.hostname.includes(h))) return;
     if ((st.launcherOffHosts || []).some(h => h === location.hostname)) return;
 
-    const { raw, roles, answers, passengers } = await load();
+    const { raw, roles, answers, passengers, learned } = await load();
     let profile = applyRole(resolve(raw), (roles || []).find(r => r.pinned) || null);
     if (!hasAnyValue(profile)) return;
 
@@ -526,7 +591,7 @@
       if (f.hasValue || f.isConsent) continue;
       if (matchAnswer(answers, f.haystack)) { n++; continue; }
       const m = RULES.score(f, profile);
-      if (m && m.score >= 0.7) n++;
+      if ((m && m.score >= 0.7) || matchAnswer(learned, f.haystack)) n++;
     }
     if (passengers.length && ROWS.findRows().length) n += passengers.length;
     if (FILES.collectFileInputs().some(t => t.purpose === 'resume')) n++;

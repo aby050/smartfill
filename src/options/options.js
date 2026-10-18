@@ -157,6 +157,33 @@ function buildAnswers() {
   });
 }
 
+let learned = [];
+async function buildLearned() {
+  const host = $('learnedList');
+  host.innerHTML = '';
+  if (!learned.length) {
+    host.append(el('p', 'hint', 'Nothing learned yet. Fill a form by hand and what you type will show up here.'));
+    return;
+  }
+  learned.forEach((a, i) => {
+    const row = el('div', 'customRow');
+    const left = el('div', 'grow');
+    const q = el('input'); q.type = 'text'; q.value = a.match || '';
+    q.oninput = () => { a.match = q.value; saveLearned(); };
+    left.append(q);
+    if (a.host) left.append(el('div', 'hint', 'first seen on ' + a.host));
+    row.append(left);
+    const v = el('input'); v.type = 'text'; v.value = a.value || ''; v.style.maxWidth = '170px';
+    v.oninput = () => { a.value = v.value; saveLearned(); };
+    row.append(v);
+    const del = el('button', 'ghost', '\u00d7');
+    del.onclick = () => { learned.splice(i, 1); saveLearned(); buildLearned(); };
+    row.append(del);
+    host.append(row);
+  });
+}
+function saveLearned() { return chrome.storage.local.set({ learned }); }
+
 function seedAnswers() {
   const have = new Set(answers.map(a => (a.match || '').toLowerCase().trim()));
   let added = 0;
@@ -203,7 +230,7 @@ async function initSync() {
       $('syncState').textContent = r.upToDate ? 'This machine is already up to date.' : 'Nothing found in your Google account yet.';
       return;
     }
-    const got = await chrome.storage.local.get(['profile', 'settings', 'roles', 'answers', 'passengers']);
+    const got = await chrome.storage.local.get(['profile', 'settings', 'roles', 'answers', 'passengers', 'learned']);
     profile = got.profile || {}; settings = { ...DEFAULT_SETTINGS, ...(got.settings || {}) };
     roles = got.roles || []; answers = got.answers || []; passengers = got.passengers || [];
     buildSections(); buildCustom(); bindSettings(); buildAnswers(); buildPax(); await refreshResumes();
@@ -396,7 +423,7 @@ function buildRoles() {
 }
 
 function bindSettings() {
-  for (const id of ['useAI', 'aiForFreeText', 'autofillOnLoad', 'confirmSensitive', 'attachResume', 'aiPickRole', 'showLauncher', 'autoScore', 'autoApply']) {
+  for (const id of ['useAI', 'aiForFreeText', 'autofillOnLoad', 'confirmSensitive', 'attachResume', 'aiPickRole', 'showLauncher', 'autoScore', 'autoApply', 'learnFromTyping']) {
     const n = $(id);
     n.checked = !!settings[id];
     n.onchange = () => { settings[id] = n.checked; queueSave(); };
@@ -489,7 +516,7 @@ function bindBackup() {
           data: await STORE.toBase64(rec.blob)
         });
       }
-      const payload = { version: 1, exportedAt: new Date().toISOString(), profile, settings, roles, answers, passengers, resumes: files };
+      const payload = { version: 1, exportedAt: new Date().toISOString(), profile, settings, roles, answers, passengers, learned, resumes: files };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -511,7 +538,8 @@ function bindBackup() {
       settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
       roles = data.roles || [];
       answers = data.answers || [];
-      await chrome.storage.local.set({ profile, settings, roles, answers, passengers });
+      learned = data.learned || learned;
+      await chrome.storage.local.set({ profile, settings, roles, answers, passengers, learned });
 
       let restored = 0;
       for (const f of (data.resumes || [])) {
@@ -524,7 +552,7 @@ function bindBackup() {
         restored++;
       }
 
-      buildSections(); buildCustom(); bindSettings(); buildAnswers(); buildPax();
+      buildSections(); buildCustom(); bindSettings(); buildAnswers(); buildPax(); buildLearned();
       await refreshResumes();
       $('saveState').textContent = restored
         ? `Imported, including ${restored} resume${restored === 1 ? '' : 's'}`
@@ -538,7 +566,7 @@ function bindBackup() {
     if (!confirm('Erase your profile, settings and API key from this browser? This cannot be undone.')) return;
     await chrome.storage.local.clear();
     if (confirm('Also erase the copy in your Google account? Cancel keeps it, so another machine can still restore.')) await SYNC.clear();
-    profile = {}; settings = { ...DEFAULT_SETTINGS }; roles = []; answers = []; passengers = [];
+    profile = {}; settings = { ...DEFAULT_SETTINGS }; roles = []; answers = []; passengers = []; learned = [];
     for (const r of resumes) await STORE.remove(r.id);
     await refreshResumes();
     buildSections(); buildCustom(); bindSettings(); buildAnswers(); buildPax();
@@ -549,13 +577,15 @@ function bindBackup() {
 
 (async function init() {
   await SYNC.pullIfNewer();
-  const got = await chrome.storage.local.get(['profile', 'settings', 'roles', 'answers', 'passengers']);
+  const got = await chrome.storage.local.get(['profile', 'settings', 'roles', 'answers', 'passengers', 'learned']);
   profile = got.profile || {};
   settings = { ...DEFAULT_SETTINGS, ...(got.settings || {}) };
   roles = got.roles || [];
   answers = got.answers || [];
   passengers = got.passengers || [];
+  learned = got.learned || [];
   buildSections();
+  buildLearned();
   buildAnswers();
   buildPax();
   buildCustom();

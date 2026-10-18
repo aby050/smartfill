@@ -50,6 +50,7 @@
     <label class="check"><input type="checkbox" id="confirmSensitive"> Never auto-fill identity documents — flag them for me instead</label>
     <label class="check"><input type="checkbox" id="attachResume"> Attach my resume to upload fields automatically</label>
     <label class="check"><input type="checkbox" id="aiPickRole"> Let Claude pick the role profile when keywords don't match <span class="need">needs a key</span></label>
+    <label class="check"><input type="checkbox" id="learnFromTyping"> Remember what I type by hand into fields Smartfill couldn't fill, and use it next time</label>
     <label class="check"><input type="checkbox" id="autoScore"> Score every job page against my resume and show <em>Apply / Maybe / Skip</em> <span class="need">needs a key</span></label>
     <div class="row">
       <label for="applyMin">Apply at or above</label><input type="number" id="applyMin" min="0" max="100" style="width:70px">
@@ -103,6 +104,12 @@
       <button id="addAnswer" class="ghost" type="button">+ Add question</button>
       <button id="seedAnswers" class="ghost" type="button">Add the usual application questions</button>
     </div>
+  </section>
+
+  <section class="card">
+    <h2>Learned from your typing</h2>
+    <p class="hint">Answers you typed by hand on a form. They are only used for questions your profile and standing answers don't cover. Edit or delete any of them.</p>
+    <div id="learnedList"></div>
   </section>
 
   <section class="card">
