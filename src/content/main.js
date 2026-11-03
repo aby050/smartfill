@@ -674,5 +674,7 @@
     mo.observe(document.documentElement, { childList: true, subtree: true });
   }
 
-  globalThis.SF_MAIN = { run, undo };
+  // Submit without a fit score: the LinkedIn runner already picked this job.
+  const autoApply = () => autoFlow({ score: 100 }, { autoApply: true, autoApplyMin: 0, autoApplyMaxSteps: 8 });
+  globalThis.SF_MAIN = { run, undo, autoApply };
 })();

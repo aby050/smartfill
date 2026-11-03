@@ -2,14 +2,27 @@
    skips country-locked ones, and walks each Easy Apply form with Smartfill's own filler.
    State lives in sessionStorage so the run survives LinkedIn's page reloads in this tab. */
 (() => {
-  if (window.top !== window || !/(^|\.)linkedin\.com$/.test(location.hostname)) return;
+  if (window.top !== window) return;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  // Company-site apply: LinkedIn opened this tab a moment ago, so fill and submit it the way auto-apply does.
+  if (!/(^|\.)linkedin\.com$/.test(location.hostname)) {
+    chrome.storage.local.get('sf_li_external').then(async ({ sf_li_external: x }) => {
+      if (!x || Date.now() - x.at > 90000) return;
+      await chrome.storage.local.remove('sf_li_external');
+      await sleep(3500);
+      globalThis.SF_MAIN?.autoApply?.();
+    });
+    return;
+  }
   const jitter = (a, b) => sleep(a + Math.random() * (b - a));
   const KEY = 'sf_li_run';
   const DAILY_CAP = 30;
-  // geoId 92000000 = Worldwide; f_WT=2 remote; f_AL Easy Apply only; f_TPR last week.
+  // f_WT=2 remote, f_TPR last week. Two searches per keyword: India (remote jobs that hire from India)
+  // and Worldwide (whose results are mostly country-locked, so the card's location is checked).
   const KEYWORDS = ['technical program manager', 'project manager', 'program manager', 'product manager', 'delivery manager', 'product owner'];
-  const searchUrl = k => `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(KEYWORDS[k])}&geoId=92000000&f_WT=2&f_AL=true&f_TPR=r604800&sortBy=DD`;
+  const GEOS = ['102713980', '92000000'];
+  const searchUrl = k => `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(KEYWORDS[k >> 1])}&geoId=${GEOS[k & 1]}&f_WT=2&f_TPR=r604800&sortBy=DD`;
+  const OPEN_LOC = /(worldwide|anywhere|apac|asia|india)/i;
   const TITLE = /(program manager|project manager|product manager|delivery manager|product owner|scrum master|head of (product|delivery|program))/i;
   // Remote, but only for one country/region that isn't open to someone living in India.
   const LOCKED = /(\b(us|usa|u\.s\.|uk|eu|canada|europe|emea|latam)[- ]only\b|only (open to|available to) candidates (in|based in) (the )?(us|united states|uk|canada|europe)|must (be|reside|live) (located |based )?in (the )?(us|usa|united states|uk|united kingdom|canada|europe|eu)|authori[sz]ed to work in (the )?(us|united states|uk|canada)|(pst|est|cst|us) (time ?zone|hours) (required|only)|security clearance)/i;
@@ -72,8 +85,18 @@
 
   // Walk one Easy Apply dialog. -> 'applied' | reason it was skipped
   async function easyApply() {
-    const open = btn(document, /Easy Apply/i);
-    if (!open) return 'no Easy Apply';
+    const pane = document.querySelector('.jobs-search__job-details--container, .jobs-details, .job-view-layout') || document;
+    const open = [...pane.querySelectorAll('button')].find(b => vis(b) && /^Easy Apply to /i.test(b.getAttribute('aria-label') || ''));
+    if (!open) {
+      const site = [...pane.querySelectorAll('button, a')].find(b => vis(b) && /^Apply to .* on company website|^\s*Apply\s*$/i.test((b.getAttribute('aria-label') || b.innerText || '').trim()));
+      if (!site) return 'no apply button';
+      await chrome.storage.local.set({ sf_li_external: { at: Date.now() } });
+      site.click();
+      await sleep(2500);
+      const go = btn(document, /^Continue$|Continue to apply/i); if (go) go.click(); // LinkedIn's "leaving LinkedIn" prompt
+      await sleep(30000); // the company tab fills and submits on its own
+      return 'site';
+    }
     open.click();
     const dlg = await waitFor(() => [...document.querySelectorAll('[role=dialog]')].find(vis));
     if (!dlg) return 'form did not open';
@@ -117,11 +140,13 @@
       const text = detailText().slice(0, 4000);
       const title = (card.querySelector('strong, .job-card-list__title, a') || card).innerText.split('\n')[0].trim();
       const company = (card.querySelector('.artdeco-entity-lockup__subtitle, .job-card-container__primary-description') || {}).innerText || '';
-      if (!TITLE.test(title) || LOCKED.test(text)) { s.skipped++; save(s); continue; }
+      const loc = (card.querySelector('.job-card-container__metadata-wrapper') || {}).innerText || '';
+      const indiaSearch = GEOS[s.k & 1] === '102713980';
+      if (!TITLE.test(title) || LOCKED.test(text) || (!indiaSearch && !OPEN_LOC.test(loc))) { s.skipped++; save(s); continue; }
       paint(`applying: ${title.slice(0, 40)}`);
       const r = await easyApply();
       s = state(); if (!s) return;
-      if (r === 'applied') {
+      if (r === 'applied' || r === 'site') {
         s.applied++; save(s); await log(title, company.trim());
         const n = await bump();
         if (n >= DAILY_CAP) return stop(`Done for today: ${s.applied} applied (cap ${DAILY_CAP}).`);
@@ -132,7 +157,7 @@
     s = state(); if (!s?.active) return;
     const more = btn(document, /View next page|^Next$/i);
     if (more) { more.click(); await sleep(3000); return loop(); }
-    if (s.k + 1 < KEYWORDS.length) { s.k++; save(s); location.href = searchUrl(s.k); return; }
+    if (s.k + 1 < KEYWORDS.length * 2) { s.k++; save(s); location.href = searchUrl(s.k); return; }
     stop(`Finished: ${s.applied} applied, ${s.skipped} skipped.`);
   }
 
