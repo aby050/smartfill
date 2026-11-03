@@ -103,7 +103,7 @@
       }
 
       UI.status('Reading the form…', true);
-      const fields = collect();
+      const fields = collect(opts.root);
       const targets = fields.filter(f => opts.overwrite || !f.hasValue);
 
       // --- pass 1: rules ---
@@ -275,7 +275,7 @@
       // fields still empty, and a required resume that could not be attached.
       const blockers = results.filter(r => !r.ok && (r.needsReview || r.via === 'consent' ||
         (r.isFile && /no resume|could not|failed/i.test(r.reason || '')))).map(r => (r.field && r.field.label) || r.key || 'field');
-      for (const f of collect()) if (f.attrs && f.attrs.required && !f.hasValue && !f.isConsent) blockers.push(f.label || 'required field');
+      for (const f of collect(opts.root)) if (f.attrs && f.attrs.required && !f.hasValue && !f.isConsent) blockers.push(f.label || 'required field');
       return { blockers, filled: results.filter(r => r.ok).length };
     } catch (e) {
       UI.status('Smartfill error: ' + (e && e.message || e), false);
