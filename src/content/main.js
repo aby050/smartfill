@@ -675,6 +675,13 @@
   }
 
   // Submit without a fit score: the LinkedIn runner already picked this job.
-  const autoApply = () => autoFlow({ score: 100 }, { autoApply: true, autoApplyMin: 0, autoApplyMaxSteps: 8 });
+  // Reports back to the LinkedIn tab whether the company form was really submitted.
+  const autoApply = async () => {
+    const n = async () => ((await chrome.storage.local.get('applications')).applications || []).length;
+    const before = await n();
+    const signIn = globalThis.SF_DOM.deepAll('input[type=password]').some(e => e.getClientRects().length);
+    if (!signIn) await autoFlow({ score: 100 }, { autoApply: true, autoApplyMin: 0, autoApplyMaxSteps: 8 });
+    await chrome.storage.local.set({ sf_li_site: { at: Date.now(), result: signIn ? 'needs you: site wants an account' : (await n()) > before ? 'submitted' : 'needs you: form not finished' } });
+  };
   globalThis.SF_MAIN = { run, undo, autoApply };
 })();
