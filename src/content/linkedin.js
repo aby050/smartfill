@@ -96,7 +96,7 @@
       await sleep(2500);
       const go = btn(document, /^Continue$|Continue to apply/i); if (go) go.click(); // LinkedIn's "leaving LinkedIn" prompt
       // The company tab fills and submits on its own, then says how it went.
-      const rep = await waitFor(async () => false, 0) || await (async () => { for (let t = 0; t < 60000; t += 1000) { const { sf_li_site: x } = await chrome.storage.local.get('sf_li_site'); if (x && x.at > Date.now() - 65000) { await chrome.storage.local.remove('sf_li_site'); return x.result; } await sleep(1000); } return 'needs you: company site did not answer'; })();
+      const rep = await (async () => { for (let t = 0; t < 60000; t += 1000) { const { sf_li_site: x } = await chrome.storage.local.get('sf_li_site'); if (x && x.at > Date.now() - 65000) { await chrome.storage.local.remove('sf_li_site'); return x.result; } await sleep(1000); } return 'needs you: company site did not answer'; })();
       return rep === 'submitted' ? 'site' : 'company site — ' + rep;
     }
     open.click();
