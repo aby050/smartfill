@@ -604,3 +604,26 @@ function bindBackup() {
   await refreshResumes();
   await initSync();
 })();
+
+// LinkedIn Find & Apply log, written by content/linkedin.js.
+(async function liLog() {
+  const { sf_li_log = [] } = await chrome.storage.local.get('sf_li_log');
+  const rows = sf_li_log.slice().reverse();
+  const t = document.getElementById('liLog');
+  const cell = (tag, txt) => { const c = document.createElement(tag); c.textContent = txt; c.style.cssText = 'text-align:left;padding:4px 6px;border-bottom:1px solid #8883'; return c; };
+  const head = document.createElement('tr');
+  for (const h of ['When', 'Job', 'Company', 'Location', 'Result']) head.append(cell('th', h));
+  t.append(head);
+  if (!rows.length) { const r = document.createElement('tr'); r.append(cell('td', 'Nothing yet.')); t.append(r); }
+  for (const x of rows) {
+    const r = document.createElement('tr');
+    const job = cell('td', ''); const a = document.createElement('a'); a.href = x.url; a.target = '_blank'; a.textContent = x.title; job.append(a);
+    r.append(cell('td', new Date(x.at).toLocaleString()), job, cell('td', x.company), cell('td', x.location), cell('td', x.result));
+    t.append(r);
+  }
+  document.getElementById('liCsv').onclick = () => {
+    const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const csv = 'when,job,company,location,result,url\n' + rows.map(x => [new Date(x.at).toISOString(), x.title, x.company, x.location, x.result, x.url].map(q).join(',')).join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'linkedin-applications.csv'; a.click();
+  };
+})();

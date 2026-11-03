@@ -44,10 +44,11 @@
     await chrome.storage.local.set({ sf_li_daily: { day: d, n } });
     return n;
   }
-  async function log(title, company) {
-    const { applications = [] } = await chrome.storage.local.get('applications');
-    applications.push({ url: location.href.split(/[?#]/)[0], host: location.hostname, title: `${title} — ${company}`, at: Date.now(), mode: 'linkedin' });
-    await chrome.storage.local.set({ applications: applications.slice(-500) });
+  // Every job tried, with its result, so applications can be checked later (options page → LinkedIn applications).
+  async function log(id, title, company, loc, result) {
+    const { sf_li_log = [] } = await chrome.storage.local.get('sf_li_log');
+    sf_li_log.push({ at: Date.now(), url: `https://www.linkedin.com/jobs/view/${id}/`, title, company: company.trim(), location: loc.trim(), result });
+    await chrome.storage.local.set({ sf_li_log: sf_li_log.slice(-2000) });
   }
 
   // --- button + status pill ---
@@ -142,17 +143,18 @@
       const company = (card.querySelector('.artdeco-entity-lockup__subtitle, .job-card-container__primary-description') || {}).innerText || '';
       const loc = (card.querySelector('.job-card-container__metadata-wrapper') || {}).innerText || '';
       const indiaSearch = GEOS[s.k & 1] === '102713980';
-      if (!TITLE.test(title) || LOCKED.test(text) || (!indiaSearch && !OPEN_LOC.test(loc))) { s.skipped++; save(s); continue; }
+      const why = !TITLE.test(title) ? 'skipped: not a PM role' : LOCKED.test(text) ? 'skipped: country-locked' : (!indiaSearch && !OPEN_LOC.test(loc)) ? 'skipped: location ' + loc.trim() : '';
+      if (why) { s.skipped++; save(s); await log(id, title, company, loc, why); continue; }
       paint(`applying: ${title.slice(0, 40)}`);
       const r = await easyApply();
       s = state(); if (!s) return;
       if (r === 'applied' || r === 'site') {
-        s.applied++; save(s); await log(title, company.trim());
+        s.applied++; save(s); await log(id, title, company, loc, r === 'site' ? 'sent on company site' : 'applied (Easy Apply)');
         const n = await bump();
         if (n >= DAILY_CAP) return stop(`Done for today: ${s.applied} applied (cap ${DAILY_CAP}).`);
         paint(`${s.applied} applied, ${s.skipped} skipped`);
         await jitter(15000, 40000); // human pace, keeps the account safe
-      } else { s.skipped++; save(s); paint(`${s.applied} applied, ${s.skipped} skipped (${r})`); await sleep(1500); }
+      } else { s.skipped++; save(s); await log(id, title, company, loc, 'skipped: ' + r); paint(`${s.applied} applied, ${s.skipped} skipped (${r})`); await sleep(1500); }
     }
     s = state(); if (!s?.active) return;
     const more = btn(document, /View next page|^Next$/i);
