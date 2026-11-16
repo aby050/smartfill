@@ -19,11 +19,13 @@
   const DAILY_CAP = 30;
   // f_WT=2 remote, f_TPR last week. Two searches per keyword: India (remote jobs that hire from India)
   // and Worldwide (whose results are mostly country-locked, so the card's location is checked).
-  const KEYWORDS = ['technical program manager', 'project manager', 'program manager', 'product manager', 'delivery manager', 'product owner'];
+  const KEYWORDS = ['technical program manager', 'project manager', 'program manager', 'product manager', 'delivery manager', 'product owner',
+    'ai product manager', 'ai program manager', 'growth product manager', 'mobile product manager', 'product operations manager',
+    'head of delivery', 'engagement manager', 'scrum master', 'agile coach', 'pmo lead', 'implementation manager', 'release manager', 'chief of staff'];
   const GEOS = ['102713980', '92000000'];
   const searchUrl = k => `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(KEYWORDS[k >> 1])}&geoId=${GEOS[k & 1]}&f_WT=2&f_TPR=r604800&sortBy=DD`;
   const OPEN_LOC = /(worldwide|anywhere|apac|asia|india|delhi|noida|gurgaon|gurugram|bengaluru|bangalore|mumbai|pune|hyderabad|chennai|kolkata|ahmedabad|jaipur|indore|kochi|chandigarh|bhopal)/i;
-  const TITLE = /(program(me)? manag|project manag|product manag|delivery (manag|lead)|product owner|scrum master|\btpm\b|\bpmo\b|project lead|program lead|implementation (lead|manager)|engagement manager|head of (product|delivery|program))/i;
+  const TITLE = /(program(me)? manag|project manag|product manag|delivery (manag|lead)|product owner|scrum master|\btpm\b|\bpmo\b|project lead|program lead|implementation (lead|manager)|engagement manager|agile coach|release manag|chief of staff|product operations|head of (product|delivery|program))/i;
   // Remote, but only for one country/region that isn't open to someone living in India.
   const LOCKED = /(\b(us|usa|u\.s\.|uk|eu|canada|europe|emea|latam)[- ]only\b|only (open to|available to) candidates (in|based in) (the )?(us|united states|uk|canada|europe)|must (be|reside|live) (located |based )?in (the )?(us|usa|united states|uk|united kingdom|canada|europe|eu)|authori[sz]ed to work in (the )?(us|united states|uk|canada)|(pst|est|cst|us) (time ?zone|hours) (required|only)|security clearance)/i;
 
@@ -53,7 +55,7 @@
 
   // Product vs project/program jobs get their own role profile (and so their own resume), picked from the
   // job TITLE — the description mentions both too often to decide on. Pinned roles are deliberately ignored here.
-  const KIND = [['product', /product (manag|owner|lead)|head of product/i], ['project', /(project|program(me)?|delivery|technical program) (manag|lead)|scrum master|\btpm\b|\bpmo\b|implementation (lead|manager)|engagement manager|head of (delivery|program)/i]];
+  const KIND = [['product', /product (manag|owner|lead|operations)|head of product/i], ['project', /(project|program(me)?|delivery|technical program) (manag|lead)|scrum master|\btpm\b|\bpmo\b|implementation (lead|manager)|engagement manager|agile coach|release manag|chief of staff|head of (delivery|program)/i]];
   async function roleFor(title) {
     const { roles = [] } = await chrome.storage.local.get('roles');
     const kind = (KIND.find(([, re]) => re.test(title)) || [])[0];
