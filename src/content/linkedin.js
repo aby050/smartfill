@@ -10,7 +10,7 @@
       if (!x || Date.now() - x.at > 90000) return;
       await chrome.storage.local.remove('sf_li_external');
       await sleep(3500);
-      globalThis.SF_MAIN?.autoApply?.();
+      globalThis.SF_MAIN?.autoApply?.(x.roleId);
     });
     return;
   }
@@ -49,6 +49,20 @@
     const { sf_li_log = [] } = await chrome.storage.local.get('sf_li_log');
     sf_li_log.push({ at: Date.now(), url: `https://www.linkedin.com/jobs/view/${id}/`, title, company: company.trim(), location: loc.trim(), result });
     await chrome.storage.local.set({ sf_li_log: sf_li_log.slice(-2000) });
+  }
+
+  // Product vs project/program jobs get their own role profile (and so their own resume), picked from the
+  // job TITLE — the description mentions both too often to decide on. Pinned roles are deliberately ignored here.
+  const KIND = [['product', /product (manag|owner|lead)|head of product/i], ['project', /(project|program(me)?|delivery|technical program) (manag|lead)|scrum master|\btpm\b|\bpmo\b|implementation (lead|manager)|engagement manager|head of (delivery|program)/i]];
+  async function roleFor(title) {
+    const { roles = [] } = await chrome.storage.local.get('roles');
+    const kind = (KIND.find(([, re]) => re.test(title)) || [])[0];
+    if (kind) {
+      const byName = roles.find(r => new RegExp('\\b' + kind + '\\b', 'i').test(r.name || ''));
+      if (byName) return byName;
+    }
+    const hit = globalThis.SF_SCHEMA?.matchRole?.(roles, title);
+    return hit ? hit.role : null;
   }
 
   // --- button + status pill ---
@@ -101,8 +115,8 @@
   const errorShown = d => [...d.querySelectorAll('.artdeco-inline-feedback--error, [data-test-form-element-error-messages], [role=alert], [id*=error]')].some(e => vis(e) && (e.innerText || '').trim());
   // LinkedIn keeps the last uploaded resume and pre-selects it, so a resume 'blocker' is not real there.
   const realBlockers = b => (b || []).filter(x => !/resume|cv|cover letter|upload|attach/i.test(x));
-  async function fillStep(dlg) {
-    for (let i = 0; i < 20; i++) { const out = await globalThis.SF_MAIN.run({ auto: true, root: dlg }); if (out) return out; await sleep(500); }
+  async function fillStep(dlg, roleId) {
+    for (let i = 0; i < 20; i++) { const out = await globalThis.SF_MAIN.run({ auto: true, root: dlg, roleId }); if (out) return out; await sleep(500); }
     return { blockers: [], filled: 0 };
   }
   const dlgRoot = () => [...document.querySelectorAll('dialog[data-testid=dialog], dialog[open], [role=dialog]')].find(vis);
@@ -114,13 +128,13 @@
   }
 
   // Walk one Easy Apply dialog. -> 'applied' | reason it was skipped
-  async function easyApply() {
+  async function easyApply(roleId) {
     const pane = detailPane() || document.querySelector('main') || document;
     const open = [...pane.querySelectorAll('button, a')].find(b => vis(b) && isEasy(b));
     if (!open) {
       const site = applyEl();
       if (!site) return 'no apply button';
-      await chrome.storage.local.set({ sf_li_external: { at: Date.now() } });
+      await chrome.storage.local.set({ sf_li_external: { at: Date.now(), roleId } });
       site.click();
       await sleep(2500);
       const go = btn(document, /^Continue$|Continue to apply/i); if (go) go.click(); // LinkedIn's "leaving LinkedIn" prompt
@@ -134,7 +148,7 @@
     let stuck = 0;
     for (let step = 0; step < 15; step++) {
       await sleep(900);
-      const out = await fillStep(dlg);
+      const out = await fillStep(dlg, roleId);
       const blk = realBlockers(out.blockers);
       if (blk.length) { await discard(); return 'needs you: ' + blk.slice(0, 2).join(', '); }
       const unfollow = dlg.querySelector('input[type=checkbox][id*=follow]'); if (unfollow?.checked) unfollow.click();
@@ -188,12 +202,13 @@
       const indiaSearch = GEOS[s.k & 1] === '102713980';
       const why = !TITLE.test(title) ? 'skipped: not a PM role' : LOCKED.test(text) ? 'skipped: country-locked' : (!indiaSearch && !OPEN_LOC.test(loc)) ? 'skipped: location ' + loc.trim() : '';
       if (why) { s.skipped++; save(s); await log(id, title, company, loc, why); continue; }
-      paint(`applying: ${title.slice(0, 40)}`);
+      const role = await roleFor(title);
+      paint(`applying${role ? ' as ' + role.name : ''}: ${title.slice(0, 40)}`);
       // One bad job must not end the whole run.
-      const r = await easyApply().catch(async e => { try { await discard(); } catch {} return 'error: ' + e.message; });
+      const r = await easyApply(role?.id).catch(async e => { try { await discard(); } catch {} return 'error: ' + e.message; });
       s = state(); if (!s) return;
       if (r === 'applied' || r === 'site') {
-        s.applied++; save(s); await log(id, title, company, loc, r === 'site' ? 'sent on company site' : 'applied (Easy Apply)');
+        s.applied++; save(s); await log(id, title, company, loc, (r === 'site' ? 'sent on company site' : 'applied (Easy Apply)') + (role ? ' as ' + role.name : ''));
         const n = await bump();
         if (n >= DAILY_CAP) return stop(`Done for today: ${s.applied} applied (cap ${DAILY_CAP}).`);
         paint(`${s.applied} applied, ${s.skipped} skipped`);

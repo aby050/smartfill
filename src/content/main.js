@@ -22,6 +22,7 @@
   }
 
   let undoStack = [];
+  let forcedRoleId = null; // set by the LinkedIn runner so a company-site form uses the job's role + resume
   let running = false;
 
   async function load() {
@@ -101,8 +102,9 @@
       }
 
       const signal = pageSignal();
-      const picked = opts.roleId
-        ? { role: roles.find(r => r.id === opts.roleId) || null, via: 'you' }
+      const rid = opts.roleId || forcedRoleId;
+      const picked = rid && roles.some(r => r.id === rid)
+        ? { role: roles.find(r => r.id === rid), via: opts.roleId ? 'you' : 'job title' }
         : await chooseRole(roles, settings, signal);
 
       let profile = resolve(raw);
@@ -693,7 +695,8 @@
 
   // Submit without a fit score: the LinkedIn runner already picked this job.
   // Reports back to the LinkedIn tab whether the company form was really submitted.
-  const autoApply = async () => {
+  const autoApply = async (roleId) => {
+    if (roleId) forcedRoleId = roleId;
     const n = async () => ((await chrome.storage.local.get('applications')).applications || []).length;
     const before = await n();
     const signIn = globalThis.SF_DOM.deepAll('input[type=password]').some(e => e.getClientRects().length);
