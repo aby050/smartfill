@@ -57,7 +57,7 @@
     ['currentTitle', [/\b(current |present )?(job )?title\b/, /\b(current|present) (position|role|designation)\b/, /\bdesignation\b/, /\bposition held\b/, /\brole\b/, /\boccupation\b/],
       [/title of/, /mr\b/, /honorific/, /job you/, /position applied/, /applying/]],
     ['currentCompany', [/\b(current |present )?(company|employer|organi[sz]ation)\b/, /\bworking at\b/], [/previous/, /school/, /college/]],
-    ['yearsExperience', [/years? of experience/, /\btotal experience\b/, /\bexperience \(years\)/, /\byrs? exp\b/, /\bwork experience\b/]],
+    ['yearsExperience', [/years? of experience/, /how many years/, /years? of [^?]{0,60}experience/, /experience (do|have) you/, /\btotal experience\b/, /\bexperience \(years\)/, /\byrs? exp\b/, /\bwork experience\b/]],
     ['noticePeriod', [/notice period/, /how soon can you join/, /availability to join/]],
     ['expectedSalary', [/expected (ctc|salary|compensation|pay)/, /\badd salary\b/, /\bdesired (pay|rate)\b/, /salary expectation/, /desired salary/]],
     ['currentSalary', [/current (ctc|salary|compensation|pay)/, /present salary/]],
