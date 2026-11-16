@@ -90,6 +90,9 @@
   function score(field, profile) {
     const hay = field.haystack;
 
+    // A "Title" made of Mr / Mrs / Ms is a salutation, not the job title.
+    if (field.options && field.options.some(o => /^(mr|mrs|ms|miss|dr)\.?$/i.test(String(o.text || o.value).trim()))) return null;
+
     // 1. autocomplete token wins outright.
     const ac = field.attrs.autocomplete.split(/\s+/).pop();
     if (ac && AUTOCOMPLETE[ac] && profile[AUTOCOMPLETE[ac]]) {

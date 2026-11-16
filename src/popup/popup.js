@@ -31,6 +31,31 @@ async function ask(type, opts, tries = 2) {
   }
 }
 
+/** Preview every frame (embedded application forms live in iframes) and keep the one with the most to fill. */
+let frameDiag = '';
+async function previewAllFrames() {
+  const tab = await activeTab();
+  const run = () => chrome.scripting.executeScript({
+    target: { tabId: tab.id, allFrames: true },
+    func: () => {
+      const url = location.href.slice(0, 70);
+      if (!globalThis.SF_PREVIEW_NOW) return { loaded: false, url };
+      return globalThis.SF_PREVIEW_NOW().then(r => ({ loaded: true, url, r }));
+    }
+  });
+  let res;
+  try { res = await run(); } catch { await ask('SF_SCAN'); res = await run(); }
+  const items = res.map(x => x.result).filter(Boolean);
+  frameDiag = `Checked ${items.length} frame${items.length === 1 ? '' : 's'}: ` + items.map(i =>
+    !i.loaded ? `[no Smartfill in ${i.url}]` :
+      i.r && i.r.ok ? `[${i.r.total} field${i.r.total === 1 ? '' : 's'} in ${i.url}]` :
+        `[error ${(i.r && i.r.error) || '?'} in ${i.url}]`).join(' ');
+  const got = items.filter(i => i.loaded && i.r && i.r.ok).map(i => i.r);
+  if (!got.length) return ask('SF_PREVIEW');
+  const weight = r => (r.total || 0) + (r.uploads || 0) + (r.rows || 0);
+  return got.sort((a, b) => weight(b) - weight(a))[0];
+}
+
 function waiting(text) {
   view.innerHTML = '';
   const s = el('div', 'state');
@@ -57,7 +82,7 @@ function render(p) {
 
   if (p.blocked) return message('Smartfill is switched off for this site.');
   if (p.profileEmpty) return message('Your profile is empty — add your details first.', true);
-  if (!p.total && !p.uploads && !p.rows) return message('No empty fields found on this page.');
+  if (!p.total && !p.uploads && !p.rows) { message('No empty fields found on this page.'); if (frameDiag) view.append(el('p', 'note', frameDiag)); return; }
 
   const fillable = p.ready + (p.useAI ? p.unknown : 0) + (p.uploads && p.hasResume ? p.uploads : 0)
     + ((p.rows || p.canAddRows) ? p.savedPassengers : 0);
@@ -106,7 +131,7 @@ function render(p) {
 (async function init() {
   const { apiKey } = await chrome.storage.local.get('apiKey');
   try {
-    const p = await ask('SF_PREVIEW');
+    const p = await previewAllFrames();
     if (!p || !p.ok) throw new Error((p && p.error) || 'could not read the page');
     render(p);
     if (p.useAI && p.unknown && !apiKey) {

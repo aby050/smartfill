@@ -98,7 +98,8 @@
     const id = input.getAttribute('aria-controls');
     const lb = (id && (input.getRootNode().getElementById(id) || document.getElementById(id))) ||
       [...globalThis.SF_DOM.deepAll('[role=listbox]')].find(l => l.getBoundingClientRect().height > 0);
-    return lb ? [...lb.querySelectorAll('[role=option]')] : [];
+    // Oracle JET renders its popup as role=grid with one role=row per choice.
+    return lb ? [...lb.querySelectorAll('[role=option], [role=row]')].filter(o => textOf(o)) : [];
   }
 
   async function openCombobox(input) {
@@ -140,6 +141,17 @@
     }
 
     if (!hit) {
+      // Oracle's Pin code / City boxes accept what you type when the lookup has no
+      // row for it, so keep the typed text and let the page commit it. Closed lists
+      // (certifications, ethnicity) are never kept this way.
+      const free = /(postal|pin ?code|zip|city|town)/i.test([input.id, input.name, input.getAttribute('aria-label')].join(' '));
+      if (free && input.value) {
+        fire(input, ['change']);
+        input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
+        input.blur();
+        await wait(120);
+        return { ok: true, applied: input.value };
+      }
       input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
       document.body.click();
       return { ok: false, reason: 'no matching option' };
@@ -239,6 +251,14 @@
       focusRing(el);
 
       if (field.kind === 'combobox') return fillCombobox(el, value);
+      if (field.kind === 'pills') {
+        const opt = matchOption(value, field.options);
+        if (!opt) return { ok: false, reason: 'no matching option' };
+        const btn = [...el.querySelectorAll('[role=radio]')].find(b => textOf(b) === opt.text);
+        if (!btn) return { ok: false, reason: 'no matching option' };
+        if (btn.getAttribute('aria-checked') !== 'true') btn.click();
+        return { ok: true, applied: opt.text };
+      }
       if (field.kind === 'uidropdown') return fillPrimeDropdown(el, value);
       if (field.kind === 'uicalendar') return fillPrimeCalendar(el, toIso(value));
       if (isPrimeAutocomplete(el)) return fillPrimeAutocomplete(el, value);

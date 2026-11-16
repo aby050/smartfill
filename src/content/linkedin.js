@@ -75,19 +75,46 @@
     location.href = searchUrl(0);
   }
 
-  const cards = () => [...document.querySelectorAll('[data-occludable-job-id], [data-job-id]')].filter(vis);
-  const detailText = () => (document.querySelector('.jobs-search__job-details--container, .jobs-details, .job-view-layout') || document.body).innerText;
+  // LinkedIn's 2026 layout: no data-job-id and hashed class names. A card is the role=button ancestor of its
+  // 'Dismiss <title> job' button; the job id only shows up in the URL (?currentJobId=) once the card is selected.
+  const cardOf = b => b.closest('[role=button]');
+  const cards = () => [...document.querySelectorAll('button[aria-label^="Dismiss"]')]
+    .filter(b => / job$/.test(b.getAttribute('aria-label') || '')).map(cardOf).filter(c => c && vis(c));
+  const cardKey = c => c.querySelector('button[aria-label^="Dismiss"]').getAttribute('aria-label') + '|' + (c.innerText.split('\n')[1] || '');
+  const jobId = () => new URLSearchParams(location.search).get('currentJobId') || (location.pathname.match(/\/jobs\/view\/(\d+)/) || [])[1] || '';
+  // The detail pane = smallest ancestor of the Apply button that holds the whole description.
+  const applyEl = () => [...document.querySelectorAll('button, a')].find(b => vis(b) && /^(Easy Apply to |Apply to )/i.test(b.getAttribute('aria-label') || ''))
+    || [...document.querySelectorAll('button, a')].find(b => vis(b) && /^\s*(Easy Apply|Apply)\s*$/i.test(b.innerText || ''));
+  const detailPane = () => { let n = applyEl(); for (let i = 0; n && i < 12; i++, n = n.parentElement) if ((n.innerText || '').length > 1500) return n; return null; };
+  // Never fall back to the whole page: it holds every other card's text and caused false 'country-locked' skips.
+  const detailText = () => (detailPane() || { innerText: '' }).innerText;
+  const isEasy = b => /^Easy Apply to /i.test(b.getAttribute('aria-label') || '') || /^\s*Easy Apply\s*$/i.test(b.innerText || '');
+  // Wait until the right-hand pane shows the job just clicked (new id + an apply button), not the previous one.
+  async function waitDetail(prevId) {
+    await waitFor(() => jobId() && jobId() !== prevId, 8000);
+    await waitFor(() => applyEl() || /no longer accepting|You applied|Applied \d/i.test(document.body.innerText.slice(0, 20000)), 8000);
+    await sleep(700);
+  }
+  const stepSig = d => (d.innerText || '').replace(/\s+/g, ' ').slice(0, 600);
+  const errorShown = d => [...d.querySelectorAll('.artdeco-inline-feedback--error, [data-test-form-element-error-messages], [role=alert], [id*=error]')].some(e => vis(e) && (e.innerText || '').trim());
+  // LinkedIn keeps the last uploaded resume and pre-selects it, so a resume 'blocker' is not real there.
+  const realBlockers = b => (b || []).filter(x => !/resume|cv|cover letter|upload|attach/i.test(x));
+  async function fillStep(dlg) {
+    for (let i = 0; i < 20; i++) { const out = await globalThis.SF_MAIN.run({ auto: true, root: dlg }); if (out) return out; await sleep(500); }
+    return { blockers: [], filled: 0 };
+  }
+  const dlgRoot = () => [...document.querySelectorAll('dialog[data-testid=dialog], dialog[open], [role=dialog]')].find(vis);
 
   async function discard() {
-    const d = btn(document, /^Dismiss|Close/i); if (d) d.click();
+    const d = btn(dlgRoot() || document, /^(Dismiss|Close)\s*$/i); if (d) d.click();
     const c = await waitFor(() => btn(document, /Discard/i), 3000); if (c) c.click();
     await sleep(800);
   }
 
   // Walk one Easy Apply dialog. -> 'applied' | reason it was skipped
   async function easyApply() {
-    const pane = document.querySelector('.jobs-search__job-details--container, .jobs-details, .job-view-layout') || document;
-    const open = [...pane.querySelectorAll('button')].find(b => vis(b) && /^Easy Apply to /i.test(b.getAttribute('aria-label') || ''));
+    const pane = detailPane() || document.querySelector('main') || document;
+    const open = [...pane.querySelectorAll('button, a')].find(b => vis(b) && isEasy(b));
     if (!open) {
       const site = [...pane.querySelectorAll('button, a')].find(b => vis(b) && /^Apply to .* on company website|^\s*Apply\s*$/i.test((b.getAttribute('aria-label') || b.innerText || '').trim()));
       if (!site) return 'no apply button';
@@ -100,25 +127,31 @@
       return rep === 'submitted' ? 'site' : 'company site — ' + rep;
     }
     open.click();
-    const dlg = await waitFor(() => [...document.querySelectorAll('[role=dialog]')].find(vis));
+    const dlg = await waitFor(dlgRoot);
     if (!dlg) return 'form did not open';
-    for (let step = 0; step < 12; step++) {
+    let stuck = 0;
+    for (let step = 0; step < 15; step++) {
       await sleep(900);
-      const out = await globalThis.SF_MAIN.run({ auto: true, root: dlg });
-      if (out?.blockers?.length) { await discard(); return 'needs you: ' + out.blockers.slice(0, 2).join(', '); }
+      const out = await fillStep(dlg);
+      const blk = realBlockers(out.blockers);
+      if (blk.length) { await discard(); return 'needs you: ' + blk.slice(0, 2).join(', '); }
       const unfollow = dlg.querySelector('input[type=checkbox][id*=follow]'); if (unfollow?.checked) unfollow.click();
       const submit = btn(dlg, /Submit application/i);
       if (submit) {
         submit.click();
         await sleep(2500);
-        const done = btn(document, /^Dismiss|Done/i); if (done) done.click();
+        const done = btn(dlgRoot() || document, /^(Dismiss|Done)\s*$/i); if (done) done.click();
         return 'applied';
       }
       const next = btn(dlg, /Continue to next step|Review your application|^\s*(Next|Review)\s*$/i);
       if (!next) { await discard(); return 'no next button'; }
+      const before = stepSig(dlg);
       next.click();
-      await sleep(1200);
-      if ([...dlg.querySelectorAll('.artdeco-inline-feedback--error, [data-test-form-element-error-messages]')].some(vis)) { await discard(); return 'a required answer was rejected'; }
+      await sleep(1500);
+      // Same step still showing = LinkedIn refused it. Refill once (fields may have rendered late), then give up.
+      if (stepSig(dlg) === before || errorShown(dlg)) {
+        if (++stuck >= 2) { await discard(); return 'needs you: a required answer was rejected'; }
+      } else stuck = 0;
     }
     await discard();
     return 'too many steps';
@@ -131,23 +164,27 @@
     await waitFor(() => cards().length, 12000);
     for (;;) {
       s = state(); if (!s?.active) return;
-      const card = cards().find(c => !s.seen.includes(c.dataset.occludableJobId || c.dataset.jobId));
+      const card = cards().find(c => !s.seen.includes(cardKey(c)));
       if (!card) break;
-      const id = card.dataset.occludableJobId || card.dataset.jobId;
-      s.seen.push(id); save(s);
+      s.seen.push(cardKey(card)); save(s);
       card.scrollIntoView({ block: 'center' });
       if (/\bApplied\b/.test(card.innerText)) continue;
-      (card.querySelector('a') || card).click();
-      await sleep(2500);
+      if (dlgRoot()) await discard(); // a leftover dialog would swallow the click
+      const prevId = jobId();
+      card.click();
+      await waitDetail(prevId);
+      const id = jobId();
       const text = detailText().slice(0, 4000);
-      const title = (card.querySelector('strong, .job-card-list__title, a') || card).innerText.split('\n')[0].trim();
-      const company = (card.querySelector('.artdeco-entity-lockup__subtitle, .job-card-container__primary-description') || {}).innerText || '';
-      const loc = (card.querySelector('.job-card-container__metadata-wrapper') || {}).innerText || '';
+      const lines = card.innerText.split('\n').map(x => x.trim()).filter(Boolean).filter(x => !/^(Selected|Viewed|Saved|Promoted|Easy Apply|Be an early applicant)/i.test(x));
+      const title = (lines[0] || '').replace(/ with verification$/i, '');
+      const company = lines[1] || '';
+      const loc = lines[2] || '';
       const indiaSearch = GEOS[s.k & 1] === '102713980';
       const why = !TITLE.test(title) ? 'skipped: not a PM role' : LOCKED.test(text) ? 'skipped: country-locked' : (!indiaSearch && !OPEN_LOC.test(loc)) ? 'skipped: location ' + loc.trim() : '';
       if (why) { s.skipped++; save(s); await log(id, title, company, loc, why); continue; }
       paint(`applying: ${title.slice(0, 40)}`);
-      const r = await easyApply();
+      // One bad job must not end the whole run.
+      const r = await easyApply().catch(async e => { try { await discard(); } catch {} return 'error: ' + e.message; });
       s = state(); if (!s) return;
       if (r === 'applied' || r === 'site') {
         s.applied++; save(s); await log(id, title, company, loc, r === 'site' ? 'sent on company site' : 'applied (Easy Apply)');

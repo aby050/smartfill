@@ -9,6 +9,18 @@
   const UI = globalThis.SF_UI;
   const { SENSITIVE_KEYS, resolve, applyRole, matchRole, matchAnswer, DEFAULT_SETTINGS, verdictFor, buttonRole, learnKey, worthLearning } = globalThis.SF_SCHEMA;
 
+  /* A standing answer replays a decision the user made, but a loose one ("no", "name")
+     must never overwrite core identity fields the profile already answers with
+     certainty — that is how Last Name came out as "No". */
+  const IDENTITY_KEYS = new Set(['firstName', 'middleName', 'lastName', 'fullName', 'email', 'phone']);
+  function savedFor(list, f, profile) {
+    const a = matchAnswer(list, f.haystack);
+    if (!a) return null;
+    const m = RULES.score(f, profile);
+    if (m && m.score >= 0.9 && IDENTITY_KEYS.has(m.key) && String(a.match).trim().length < 14) return null;
+    return a;
+  }
+
   let undoStack = [];
   let running = false;
 
@@ -111,7 +123,7 @@
       const unresolved = [];
       for (const f of targets) {
         // A decision the user already made, replayed verbatim. Outranks everything.
-        const saved = matchAnswer(answers, f.haystack);
+        const saved = savedFor(answers, f, profile);
         if (saved) {
           results.push({ field: f, key: 'saved', value: saved.value, via: 'saved' });
           continue;
@@ -472,7 +484,7 @@
     const fields = collect().filter(f => !f.hasValue);
     let ready = 0, consents = 0, unknown = 0;
     for (const f of fields) {
-      if (matchAnswer(answers, f.haystack)) { ready++; continue; }
+      if (savedFor(answers, f, profile)) { ready++; continue; }
       if (f.isConsent) { consents++; continue; }
       const m = RULES.score(f, profile);
       if ((m && m.score >= 0.7) || matchAnswer(learned, f.haystack)) ready++; else unknown++;
@@ -505,6 +517,11 @@
     }
     undoStack = [];
   }
+
+  /* Careers sites such as iCIMS embed the whole application in an iframe. A popup
+     message is answered by whichever frame replies first, and that is the empty
+     top page, so the popup instead runs this in every frame and keeps the best. */
+  globalThis.SF_PREVIEW_NOW = () => preview().catch(e => ({ ok: false, error: String((e && e.message) || e) }));
 
   chrome.runtime.onMessage.addListener((msg, _s, send) => {
     if (msg.type === 'SF_RUN') { run(msg.opts || {}); send({ ok: true }); }
@@ -609,7 +626,7 @@
     let n = 0;
     for (const f of collect()) {
       if (f.hasValue || f.isConsent) continue;
-      if (matchAnswer(answers, f.haystack)) { n++; continue; }
+      if (savedFor(answers, f, profile)) { n++; continue; }
       const m = RULES.score(f, profile);
       if ((m && m.score >= 0.7) || matchAnswer(learned, f.haystack)) n++;
     }

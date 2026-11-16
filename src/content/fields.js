@@ -79,6 +79,21 @@
     return true;
   }
 
+  /* Bot traps. Oracle Recruiting's email step has a real-looking text input
+     (`honey-pot-1`) that reports a full size but sits in a zero-height row and is
+     aria-hidden; filling it flags the applicant as a bot. A person can never reach
+     it, so neither may we. */
+  const HONEYPOT_RE = /(honey.?pot|\bhp[-_ ]?field\b|bot.?trap|leave.?(this )?blank)/i;
+  function isHoneypot(el) {
+    if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') return false;
+    const t = (el.type || 'text').toLowerCase();
+    if (t === 'checkbox' || t === 'radio') return false;
+    if (HONEYPOT_RE.test((el.name || '') + ' ' + (el.id || ''))) return true;
+    if (el.getAttribute('aria-hidden') === 'true') return true;
+    const row = el.closest('.input-row--invisible, [hidden], [aria-hidden="true"]');
+    return !!row && row.getBoundingClientRect().height === 0;
+  }
+
   function textOf(node) {
     if (!node) return '';
     return (node.innerText || node.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 200);
@@ -182,6 +197,9 @@
         .slice(0, 300)
         .map(o => ({ value: o.value, text: o.text.replace(/\s+/g, ' ').trim() }));
     }
+    if (el.getAttribute && el.getAttribute('role') === 'radiogroup' && !el.querySelector('input[type=radio]')) {
+      return pillButtons(el).map(b => ({ value: textOf(b), text: textOf(b) }));
+    }
     if (el.type === 'radio' && el.name) {
       const peers = [...el.form ? el.form.elements : el.getRootNode().querySelectorAll(`input[type=radio][name="${el.name}"]`)]
         .filter(x => x.type === 'radio' && x.name === el.name);
@@ -190,7 +208,13 @@
     return null;
   }
 
+  /* Oracle Recruiting answers Yes/No and Title as a row of <button role=radio>
+     "pills" inside <ul role=radiogroup> — no <input type=radio> anywhere. */
+  const pillButtons = g => [...g.querySelectorAll('[role=radio]')].filter(b => textOf(b));
+  const isPillGroup = el => el.getAttribute('role') === 'radiogroup' && !el.querySelector('input[type=radio]') && pillButtons(el).length > 0;
+
   function kindOf(el) {
+    if (el.getAttribute && isPillGroup(el)) return 'pills';
     // PrimeNG renders a dropdown as a custom element with an overlay panel and no
     // <select> anywhere, so it needs its own kind and its own fill path.
     const tag = el.tagName.toLowerCase();
@@ -211,14 +235,17 @@
 
   function collect(root = document) {
     const els = deepAll(
-      'input, select, textarea, [contenteditable="true"], [role="textbox"], p-dropdown, p-calendar', root);
+      'input, select, textarea, [contenteditable="true"], [role="textbox"], [role="radiogroup"], p-dropdown, p-calendar', root);
     const seenRadioGroups = new Set();
     const out = [];
 
     for (const el of els) {
       if (el.tagName === 'INPUT' && SKIP_TYPES.has((el.type || '').toLowerCase())) continue;
+      // A radiogroup wrapper is only a field of its own when it holds pill buttons.
+      if (el.getAttribute('role') === 'radiogroup' && !isPillGroup(el)) continue;
       if (inOurUi(el)) continue;
       if (!visible(el) && !proxyButton(el)) continue;
+      if (isHoneypot(el)) continue;
 
       const kind = kindOf(el);
       if (kind === 'password') continue;
@@ -306,6 +333,10 @@
       return i ? (i.value || '').trim() : '';
     }
     if (el.isContentEditable) return el.textContent.trim();
+    if (el.getAttribute && el.getAttribute('role') === 'radiogroup') {
+      const on = el.querySelector('[role=radio][aria-checked=true]');
+      return on ? textOf(on) : '';
+    }
     if (el.type === 'checkbox') return el.checked ? 'on' : '';
     if (el.type === 'radio') {
       const peers = el.getRootNode().querySelectorAll(`input[type=radio][name="${el.name}"]`);
