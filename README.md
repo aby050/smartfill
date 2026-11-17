@@ -1,16 +1,41 @@
 # Smartfill
 
-A Chrome extension that fills forms from a profile you keep locally, attaches the
-right resume for the role you're applying as, and asks Claude about the fields its
-rules can't place — including open questions like "why do you want this role",
-which it answers from your own summary and cover-letter text.
+**AI-assisted form autofill for Chrome — local-first, privacy-aware, and honest about what it does.**
+
+[![CI](https://github.com/aby050/smartfill/actions/workflows/ci.yml/badge.svg)](https://github.com/aby050/smartfill/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?logo=googlechrome&logoColor=white)
+![No build step](https://img.shields.io/badge/build-none%20(vanilla%20JS)-brightgreen)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
+Smartfill fills forms from a profile you keep locally, attaches the right resume for the
+role you're applying as, and asks Claude only about the fields its rules can't place —
+including open questions like "why do you want this role", answered from your own
+summary and cover-letter text.
+
+## Highlights
+
+- **Works without an API key.** ~70 deterministic rules plus `autocomplete` tokens fill most forms instantly, offline.
+- **Optional AI fallback.** Bring your own Claude API key for oddly worded fields, free-text answers, role detection and a job-fit score.
+- **Role profiles.** Keep variants (Product Manager, Engineer, …) with their own resume, keywords and field overrides.
+- **Resume attachment.** Real `DataTransfer` uploads, dropzone support, `accept`-aware, undoable.
+- **Never answers consents for you.** Legal declarations are detected and left to you, unless you saved a standing answer.
+- **Component-library aware.** Adapters for PrimeNG dropdowns, autocompletes and calendars that have no native `<select>`.
+- **Repeated rows.** Fills one block per person on booking and group forms, clicking the form's own "add" button.
+- **Private by design.** No server, no telemetry. Passwords, OTPs, card numbers and identity documents never leave the page.
+
+## Table of contents
+
+- [Install](#install) · [Use](#use) · [Role profiles](#role-profiles) · [Resumes](#resumes) · [Job fit score](#job-fit-score)
+- [How it decides](#how-it-decides) · [What goes where](#what-goes-where) · [Testing it](#testing-it) · [Layout](#layout)
+- [Contributing](#contributing) · [License](#license)
 
 ## Install
 
 1. `chrome://extensions` → turn on **Developer mode** → **Load unpacked** → pick this folder.
    Keep it somewhere permanent: an unpacked extension is loaded **from its folder**, so if
    that folder disappears — an unplugged drive, a moved directory — Chrome disables the
-   extension. `~/Smartfill` is the home; the pendrive copy is a backup, not the live one.
+   extension.
 2. The options page opens on first install. Fill in as much of the profile as you care
    about — it saves as you type. **No account and no API key are needed**; the extension
    fills forms out of the box.
@@ -241,7 +266,13 @@ There is no server. The extension talks to the Claude API and nothing else.
 
 ## Testing it
 
-Open `test/form.html` from disk (`file://` — the extension runs there too) and press
+Run the unit tests (Node 18+, no dependencies):
+
+```bash
+node test/run.js
+```
+
+Then try it by hand: open `test/form.html` from disk (`file://` — the extension runs there too) and press
 Alt+Shift+F. That form is built to be awkward: mangled `name` attributes, a country
 dropdown, DD/MM/YYYY, a radio group, a free-text question, and both a resume and a cover-letter upload.
 
@@ -256,7 +287,7 @@ dropdown, DD/MM/YYYY, a radio group, a free-text question, and both a resume and
 
 ## Publishing
 
-`PUBLISHING.md` covers the Chrome Web Store route: packaging (`./package.sh`), the $5
+[`docs/PUBLISHING.md`](docs/PUBLISHING.md) covers the Chrome Web Store route: packaging (`./package.sh`), the $5
 developer account, the listing fields, per-permission justification text, and the data
 disclosures. Read the first section before you move the folder or install a store build —
 an extension ID change wipes local storage, so export your data first.
@@ -270,10 +301,23 @@ src/common/store.js       resume files in IndexedDB
 src/content/fields.js     scanning and describing controls
 src/content/files.js      upload detection + DataTransfer attachment
 src/content/rules.js      deterministic matching + value shaping
-src/content/filler.js     framework-safe writing
+src/content/filler.js     framework-safe writing + component-library adapters
+src/content/rows.js       repeated per-person rows (booking / group forms)
+src/content/linkedin.js   LinkedIn job search helper
+src/common/sync.js        chunked chrome.storage.sync
 src/content/ui.js         review panel (shadow DOM)
 src/content/main.js       orchestration
 src/background/worker.js  the only code that sees the API key
 src/options/              profile editor
 src/popup/                toolbar menu
 ```
+
+## Contributing
+
+Contributions are welcome — bug reports with a reproducible form are the most valuable thing
+you can send. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request, and
+[SECURITY.md](SECURITY.md) for reporting vulnerabilities privately.
+
+## License
+
+[MIT](LICENSE) © 2026 Abhay Bundela / RVA Studio

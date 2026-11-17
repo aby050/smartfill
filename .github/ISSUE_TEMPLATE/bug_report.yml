@@ -1,0 +1,33 @@
+name: Bug report
+description: A form filled wrongly, or something broke.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Please remove any personal data before posting.
+  - type: input
+    id: url
+    attributes:
+      label: Page URL (or "local reproduction")
+    validations:
+      required: true
+  - type: textarea
+    id: field
+    attributes:
+      label: Field details
+      description: Label, name, id, autocomplete and placeholder of the affected field.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened vs. what you expected
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Smartfill version
+      placeholder: "0.17.0"
+  - type: input
+    id: chrome
+    attributes:
+      label: Chrome version and OS
