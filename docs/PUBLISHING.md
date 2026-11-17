@@ -19,7 +19,7 @@ Skipping step 1 loses your resumes — they are the one thing account sync canno
 ## Package it
 
 ```bash
-~/Smartfill/package.sh
+./package.sh
 ```
 
 Writes `smartfill-<version>.zip` containing only `manifest.json`, `icons/` and `src/`.
@@ -36,9 +36,7 @@ has already seen, and versions only go up.
 2. **Verify your email and, for a public listing, your identity.** Unverified publishers
    can only publish unlisted items.
 3. **A privacy policy at a public URL.** Mandatory here — the extension handles personal
-   data. You already publish static pages this way for WealthAxis Pro
-   (`aby050/WealthAxis-Pro-pages` → GitHub Pages); add a `smartfill-privacy.html` there
-   and use that URL. It must state plainly: data is stored locally in the browser, form
+   data. Any static host works (GitHub Pages, Cloudflare Pages). It must state plainly: data is stored locally in the browser, form
    fields and profile text are sent to Anthropic's API to be matched, resume files are
    sent only when the user asks for a fit score, identity-document numbers are never sent,
    and nothing is sold or shared with anyone else.
@@ -105,6 +103,6 @@ two to three weeks, and a rejection usually names one fixable thing. Two ways to
 
 ## The alternative: don't publish
 
-If this is only for your machines, the store is optional. Keep it unpacked at
-`~/Smartfill` and it survives reboots — the pendrive was the only problem. To get it
-onto a second machine without the store, copy the folder and use Export/Import.
+If this is only for your own machines, the store is optional. Keep the unpacked folder
+somewhere permanent and it survives reboots. To move it to a second machine without the
+store, copy the folder and use Export/Import.
