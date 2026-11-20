@@ -43,7 +43,7 @@
       fields: [
         { key: 'email', label: 'Email', type: 'email' },
         { key: 'altEmail', label: 'Alternate email', type: 'email' },
-        { key: 'phone', label: 'Phone', hint: 'Include country code, e.g. +91 87700 39953' },
+        { key: 'phone', label: 'Phone', hint: 'Include country code, e.g. +91 98765 43210' },
         { key: 'dialCode', label: 'Phone country code', hint: 'e.g. +91. Leave blank to derive it from your phone number or country.',
           derived: p => dialFor(p) },
         { key: 'altPhone', label: 'Alternate phone' },

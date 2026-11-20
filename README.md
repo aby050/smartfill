@@ -1,4 +1,6 @@
-# Smartfill
+<img src="icons/icon128.png" width="80" alt="Smartfill icon" />
+
+# Smartfill — Smart Form Autofill for Chrome
 
 **AI-assisted form autofill for Chrome — local-first, privacy-aware, and honest about what it does.**
 
@@ -12,6 +14,12 @@ Smartfill fills forms from a profile you keep locally, attaches the right resume
 role you're applying as, and asks Claude only about the fields its rules can't place —
 including open questions like "why do you want this role", answered from your own
 summary and cover-letter text.
+
+## Screenshots
+
+| Settings | Profile |
+|---|---|
+| <img src="docs/screenshots/options.png" alt="Smartfill settings page" /> | <img src="docs/screenshots/profile.png" alt="Smartfill profile editor" /> |
 
 ## Highlights
 
